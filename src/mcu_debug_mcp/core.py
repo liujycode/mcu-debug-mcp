@@ -6155,8 +6155,36 @@ def _load_map_full(path):
     if fmt is None:
         return None
     parsed = {"gnu": _parse_map_gnu, "keil": _parse_map_keil, "iar": _parse_map_iar}[fmt](text)
+    parsed["_sibling_elf"] = _sibling_elf_path(key, len(parsed["symbols"]))
     _MAP_CACHE[key] = (mtime, parsed)
     return parsed
+
+
+def _sibling_elf_path(map_path, nsyms):
+    """同目录是否有 .elf 能给出更完整的符号表——只报事实，不自动替换。
+
+    ★ 为什么不做「自动升级到 .elf」（2026-10-13 实测）：
+      GNU ld 默认**不在 map 里输出符号表**，只有编译单元起点和链接器生成的
+      段符号。实测同一个固件：fw.map 解析出 3 个符号（含 g_vectors 这个
+      段符号），fw.elf 有 31 个。此时拿 map 反查 0x08000054 会答
+      「g_vectors（偏移 0x54）」——真实函数是 uart_puts，**假名字比没名字更
+      害人**（这正是本函数 docstring 写明要避免的）。
+
+    但也不能悄悄换源：用户给的是 .map，.elf 可能是另一次构建的产物（版本
+      不一致时地址对不上，比不反查更难查）。所以做法是【如实告知】：
+      把同名 .elf 摆出来让用户自己选。
+
+    阈值取 10：Keil/IAR 的 map 带完整符号表，符号数天然上百；GNU ld 不带
+    符号表时只有个位数条目。低于 10 且同目录有 .elf，才提示。
+    """
+    if nsyms >= 10:
+        return None
+    d, base = os.path.split(map_path)
+    for ext in (".elf", ".axf", ".out"):
+        cand = os.path.join(d, os.path.splitext(base)[0] + ext)
+        if os.path.isfile(cand):
+            return cand
+    return None
 
 
 def _load_map_symbols(path):
@@ -6313,9 +6341,36 @@ def symbol_lookup(path, addresses):
                 lines.append("  %s同址还有：%s" % (" " * 14, ", ".join(others)))
 
     lines.append("")
-    lines.append("说明：符号名来自 map 的符号表。带 size 的符号可判断是否越界；"
-                 "无 size 的符号只给了基点，偏移可能不准。")
+    if _is_elf(path):
+        lines.append("说明：符号名来自 ELF 的 .symtab，带真实 st_size，"
+                     "所以「正好是入口」和「越界」都是硬结论。")
+    else:
+        lines.append("说明：符号名来自 map 的符号表。带 size 的符号可判断是否越界；"
+                     "无 size 的符号只给了基点，偏移可能不准。")
+    lines.extend(_map_symbol_scarcity_note(_load_map_full(path)))
     return "\n".join(lines)
+
+
+def _map_symbol_scarcity_note(parsed):
+    """map 符号表稀疏时，把「同名 .elf 有更全符号表」如实摆出来。
+
+    ★ 只报事实、不自动替换：.elf 可能是另一次构建的产物，版本不一致时
+      地址对不上，静默换源比不反查更难查。所以这里明确告诉用户"有这个
+      选择"，换不换由用户决定。
+    """
+    sib = (parsed or {}).get("_sibling_elf")
+    if not sib:
+        return []
+    n = len(parsed.get("symbols") or [])
+    return [
+        "",
+        "⚠ 这份 map 只解析出 %d 个符号——GNU ld 默认**不往 map 里写符号表**。"
+        % n,
+        "  同目录有 %s，它的 .symtab 带真实符号与大小，反查会准得多：" % os.path.basename(sib),
+        "    %s" % sib,
+        "  ★ 请确认它与这份 map 出自同一次构建，再拿它重跑；"
+        "版本不一致时地址会错位。",
+    ]
 
 
 def stack_unwind(path, frame=None, exc_return=None, sp=None):
@@ -6493,6 +6548,7 @@ def stack_unwind(path, frame=None, exc_return=None, sp=None):
     lines.append("  1. 若 PC 落在合法函数 → 结合 decode_fault 的故障类型判断根因")
     lines.append("  2. 若 PC 未找到符号 → 重点查栈溢出（用 parse_map 看大符号）与函数指针")
     lines.append("  3. 若 CFSR 有 STKERR/UNSTKERR → 栈问题已确认，查栈大小配置")
+    lines.extend(_map_symbol_scarcity_note(_load_map_full(path)))
     return "\n".join(lines)
 
 

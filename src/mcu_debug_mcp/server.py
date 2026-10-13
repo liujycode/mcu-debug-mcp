@@ -453,9 +453,14 @@ def parse_map(path: str, top_n: int = 15) -> str:
 def symbol_lookup(path: str, addresses: list) -> str:
     """把地址反查成「函数名+偏移」。fault 地址定位代码的关键一步。
 
-      symbol_lookup("build/app.map", ["0x08004a2c"])
-    path 是 .map 路径（与 parse_map 同一个）。★找不到符号时明确报"未找到"，
-    不给猜测的函数名——猜出来的名字比没名字更害人。"""
+      symbol_lookup("build/app.elf", ["0x08004a2c"])
+    ★优先给 .elf 而不是 .map：.elf 的 .symtab 带真实 st_size，能判断
+    「地址还在不在这个函数内」；.map 只能靠「下一个符号 − 本符号」推断。
+    ★GNU ld（GCC/STM32CubeIDE/ESP-IDF）默认**不往 .map 里写符号表**，
+    同一份固件的 .map 可能只有个位数条目（实测 3 个，而 .elf 有 31 个）。
+    此时反查会命中段符号给出**假函数名**——所以本工具遇到这种稀疏 map 会
+    明确提示，并把同目录的 .elf 摆出来让你换源。
+    找不到符号时明确报"未找到"，不给猜测的函数名——猜出来的名字比没名字更害人。"""
     return core.symbol_lookup(path, addresses)
 
 
@@ -465,7 +470,9 @@ def stack_unwind(path: str, frame: list = None, exc_return: int = None,
     """栈回溯：把 fault 时压栈的 8 个字还原成调用链，定位出错函数。
 
     frame 按硬件压栈顺序：[R0, R1, R2, R3, R12, LR, PC, xPSR]
-      stack_unwind("build/app.map", frame=[r0,r1,r2,r3,r12,lr,pc,xpsr])
+      stack_unwind("build/app.elf", frame=[r0,r1,r2,r3,r12,lr,pc,xpsr])
+    ★同 symbol_lookup：优先给 .elf。.map 的符号表稀疏时 PC/LR 可能反查出
+    假函数名，工具会就此提示。
     exc_return 传 handler 入口时的 LR——它决定栈帧是标准还是 FPU 扩展、
     以及异常前用的是 MSP 还是 PSP（RTOS 任务）。传了会给出更准的判断。
     ★ PC 反查不到符号时，说明是典型「跑飞」，工具会给排查方向。"""
@@ -952,11 +959,13 @@ def diag_crash(map_or_elf: str = "<固件 .map 或 .elf>") -> str:
         "有寄存器现场时（最强证据，按序做）：\n"
         "1. decode_fault(cfsr=..., hfsr=..., bfar=..., mmfar=...) —— 直接翻译故障位域，\n"
         "   告诉你到底是总线错误 / 内存管理 / 用法错误，以及精确还是非精确总线故障。\n"
-        "2. 有 .map 或 .elf 时：\n"
+        "2. 有 .elf 或 .map 时（★优先 .elf）：\n"
         "   · parse_map(%s) 看 Flash/RAM 占用是否超了；\n"
         "   · symbol_lookup(%s, [\"0x...\"]) 把 PC/LR 地址换成函数名；\n"
         "   · stack_unwind(%s, frame=[...]) 还原调用栈。\n"
         "   ★ ARM Thumb 下函数地址最低位是标志位不是地址，本工具已处理（不会整体偏 1）。\n"
+        "   ★ GCC/STM32CubeIDE/ESP-IDF 的 .map 默认【没有符号表】，反查会给假函数名。\n"
+        "     所以只要手上有 .elf 就用 .elf；工具遇到稀疏 map 也会提示并指出 .elf 在哪。\n"
         "3. 常见根因：空指针解引用、栈溢出（查栈水位）、数组越界、DMA 与 CPU 竞争、\n"
         "   未对齐访问。\n"
         "\n"
