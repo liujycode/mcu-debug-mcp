@@ -26,6 +26,7 @@ prune src/mcu_debug_mcp/tools/**/*.map
 recursive-include docs *.md
 recursive-include tests *.py
 recursive-include examples *.py
-recursive-include .github *.yml *.yaml
+# 只写 *.yml：仓库里没有 .yaml，写了产生 "no files found" 构建警告
+recursive-include .github *.yml
 include pyproject.toml setup.py
 global-exclude __pycache__ *.pyc *.pyo

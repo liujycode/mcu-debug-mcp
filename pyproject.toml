@@ -1,5 +1,7 @@
 [build-system]
-requires = ["setuptools>=68"]
+# >=77：PEP 639 SPDX license 字符串 + license-files 需要（setuptools 84 明确
+# 2027-02-18 起停收 license 表格式，2026-10-13 发布预检时提前换轨）
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,11 +12,19 @@ dynamic = ["version"]
 description = "嵌入式硬件调试 MCP：串口直连 + 直连调试器读芯片身份/复位原因 + 烧录后逐字节校验 + 45 条异常模式库 + 三引擎引脚检测 + 板级知识库 + 会话持久化 + 预验证驱动库 + 报文解析（自定义帧/NMEA）"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+# PEP 639：SPDX 表达式 + 显式 license-files（旧表格式 { text = "MIT" } 已 deprecated）
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "mcu-debug-mcp contributors" }]
 keywords = ["mcp", "embedded", "serial", "stm32", "esp32", "arduino", "graduation-project"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: C",
     "Topic :: Software Development :: Embedded Systems",
 ]

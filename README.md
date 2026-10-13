@@ -193,7 +193,7 @@ mcu-debug-mcp
 
 **Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式。
 
-## 验证状态（2026-10-13 复验，v4.5.2）
+## 验证状态（2026-10-13 复验，v4.5.3）
 
 | 模块 | 验证方式 | 状态 |
 |------|----------|------|
@@ -312,7 +312,7 @@ mcu-debug-mcp/
 ├── setup.py            # 仅保留构建临时目录重定向（打包声明全在 pyproject.toml）
 ├── coverage.json       # 能力面清单（26 缺口 + 27 能力轴，审计脚本据此对账）
 ├── SECURITY.md         # 安全与隔离模型 + 破坏性操作矩阵 + 漏洞报告通道
-├── pyproject.toml      # src 布局 + include-package-data + console script（v4.5.2）
+├── pyproject.toml      # src 布局 + include-package-data + console script（v4.5.3）
 ├── MANIFEST.in         # sdist 收录清单（漏一行就复发「装出来是空壳」）
 ├── requirements.txt
 ├── examples/           # offline_demo.py：离线可跑的示例

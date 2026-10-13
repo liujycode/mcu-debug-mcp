@@ -25,6 +25,37 @@
 
 ---
 
+## [4.5.3] - 2026-10-13
+
+**PyPI 发布预检轮：metadata 换轨 + 产物核验——上传前的最后一公里全过。**
+
+### Changed
+
+- **license 换轨 PEP 639**：`license = { text = "MIT" }` 表格式被 setuptools 84 标记 deprecated
+  （2027-02-18 起停收），改为 SPDX 表达式 `license = "MIT"` + 显式 `license-files = ["LICENSE"]`；
+  `build-system requires` 相应从 `setuptools>=68` 提到 `>=77`（SPDX 语法最低版本）。
+  产物 METADATA 随之从 `License: MIT` 升级为 `License-Expression: MIT`（Metadata-Version 2.4）。
+- **MANIFEST.in 清死规则**：`recursive-include .github *.yml *.yaml` 中 `*.yaml` 全仓库无匹配，
+  每次构建产生 `warning: no files found matching '*.yaml'`，收窄为 `*.yml`——构建日志零警告。
+
+### Added
+
+- **classifiers 补齐**：`Development Status :: 4 - Beta`、`Intended Audience :: Developers`、
+  `Programming Language :: Python :: 3.10–3.13`（与 requires-python 对齐，PyPI 分类页可筛）。
+- **发布预检全过（2026-10-13 实测）**：干净重建 sdist+wheel 零 deprecation warning；
+  `twine check` 双 PASSED（4.5.3-py3-none-any.whl + tar.gz）；sdist 核验 LICENSE/SECURITY.md/
+  CHANGELOG.md/README.md/pyproject.toml 全收录、knowledge 20 / drivers 55 条目；
+  wheel 核验 site-packages 顶层零泄漏、`dist-info/licenses/LICENSE` 在位、knowledge 15 /
+  drivers 45 / tools 12；README 公开页扫描无本机路径/用户名/内网 IP（COM 串口号为实测记录）；
+  `requires-python>=3.10` 经静态扫描确认无 3.11+ API（tomllib/Self/ExceptionGroup 零使用）。
+
+### Fixed
+
+- 全量 pytest 偶发 3 error（test_package_smoke 安装冒烟）实锤为构建隔离环境拉依赖时
+  镜像源瞬时抖动：单跑文件 10 passed、全量复跑 704 passed / 2 skipped 与基线一致，非代码问题。
+
+---
+
 ## [4.5.2] - 2026-10-13
 
 **C 档结构性重构：src 正规包布局——「能进 PyPI 而不污染别人环境」的最后一关。**
