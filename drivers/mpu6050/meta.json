@@ -1,0 +1,8 @@
+{
+  "name": "mpu6050",
+  "desc": "MPU6050 六轴传感器驱动（I2C，量程换算+静止自检纯函数分离）",
+  "version": "1.0.0",
+  "verified": "mg/dps/温度换算/静止自检 Python 交叉验证通过（2026-09-20）；C 编译验证待 gcc 可用环境（Makefile 已备）",
+  "usage": "复制 mpu6050.h/mpu6050.c/mpu6050_port.h 进工程，port 层提供 I2C 读写两函数（7 位地址 0x68，AD0 接地）",
+  "common_pitfalls": "睡眠模式未解除→全0；8位地址当7位→NACK；I2C超400kHz→错乱；无零偏校准→姿态漂移"
+}

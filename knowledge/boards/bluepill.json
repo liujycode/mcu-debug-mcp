@@ -1,0 +1,22 @@
+{
+  "board": "BluePill（STM32F103C8T6 蓝药丸）",
+  "alias": ["bluepill", "蓝药丸", "stm32f103c8t6 最小系统板"],
+  "mcu": "stm32f103c8t6",
+  "source": "常见蓝药丸原理图（V2.x 版本）+ ST 社区蓝药丸板级分析",
+  "onboard": {
+    "LED1": { "source": "蓝药丸（BluePill）常见版本原理图 V2.x", "pin": "PC13", "active": "low", "note": "低电平点亮！点灯代码输出 0 才亮。PC13 驱动能力弱（<3mA），只够这颗 LED" },
+    "USB": { "source": "蓝药丸（BluePill）常见版本原理图 V2.x", "pins": ["PA11", "PA12"], "note": "USB DP 上拉电阻 R10（1.5kΩ 到 3.3V）部分克隆板没焊/阻值错——USB 枚举失败先查它" },
+    "USB_TO_UART": { "source": "蓝药丸（BluePill）常见版本原理图 V2.x", "pins": ["PA9", "PA10"], "note": "板载 CH340/CH140 接 PA9/PA10：USB 口直出的串口就是 USART1，插 USB 就别再抢这两个脚" },
+    "SWD": { "source": "蓝药丸（BluePill）常见版本原理图 V2.x", "pins": ["PA13", "PA14"], "note": "4 针 SWD 排针（3.3V/SWDIO/SWCLK/GND）" },
+    "BUTTON_RESET": { "source": "蓝药丸（BluePill）常见版本原理图 V2.x", "pin": "NRST", "note": "RESET 按键接 NRST；没有 BOOT0 按键的版本靠跳线帽选择启动模式" }
+  },
+  "board_issues": [
+    "LED 是低电平点亮：copy来的点灯代码 if 输出高电平会发现灯不亮（反直觉头号坑）",
+    "克隆芯片：便宜板子可能是 CH32F103/GD32F103 冒充——USB 下载模式与 ST 有差异，读保护行为也不同；板子正反面有细字型号，值得看一眼",
+    "R10（USB 上拉）缺失：USB 插上电脑毫无反应或'无法识别的设备'，焊一个 1.5kΩ 或改用 PA12 软件上拉",
+    "8MHz 晶振：HSE=8MHz×9=72MHz 是默认时钟树前提，个别假板焊 12MHz 晶振导致 USB/UART 波特率全错（现象：串口乱码但程序在跑）",
+    "3.3V 稳压器弱：板载 RT9193 只能给 MCU 自身供电，别从 3.3V 脚给大电流外设（OLED+传感器可以，舵机/电机不行）",
+    "VBUS 不接 MCU：板子不知道 USB 是否插入（无 VBUS 检测），USB 挂起类应用要自己飞线 PA12→VBUS 分压"
+  ],
+  "power_notes": "5V 引脚接 USB/外部 5V（过板载稳压出 3.3V）；3.3V 引脚只能小电流输出。调试器供电与 USB 同时接时注意 ST-Link 的 3.3V 与板载稳压并联问题（一般无碍，但最好单源）"
+}

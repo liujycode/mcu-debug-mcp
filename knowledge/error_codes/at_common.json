@@ -1,0 +1,18 @@
+{
+  "id": "at_common",
+  "desc": "AT 指令集通用响应/错误串（ESP-AT 基础指令集通用段）",
+  "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应枚举：ready/ERROR/busy/SEND OK/SEND FAIL/CLOSED 等）",
+  "entries": {
+    "ready":     { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "模块启动完成，可接收指令", "hint": "刚上电后看到 ready 才发 AT——过早发指令会被丢弃（这是「AT 没反应」的头号原因）" },
+    "ERROR":     { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "指令执行失败（参数错 / 不支持 / 当前状态不符）", "hint": "逐条单发定位是哪条失败；查指令拼写、参数个数、是否要先 AT+CWMODE/AT+CIPMUX" },
+    "busy p...": { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "上一条指令还在处理中，模块忙", "hint": "不要连发——等上一条的 OK 到了再发下一条，或加入延时重试" },
+    "FAIL":      { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "连接类操作失败（AT+CWJAP / AT+CIPSTART 等）", "hint": "WiFi 连接失败查 SSID/密码/2.4G；TCP 连接失败查目标 IP 可达性与端口" },
+    "SEND OK":   { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "数据已成功交给协议栈发送", "hint": "注意：SEND OK 只表示数据进了发送缓冲，不代表对端收到了" },
+    "SEND FAIL": { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "数据发送失败（连接已断 / 发送缓冲满）", "hint": "查连接是否还在（看有没有 CLOSED）、发送是否过快、是否超过了单包长度限制" },
+    "CLOSED":    { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "TCP/UDP 连接已关闭", "hint": "对端关闭或网络断了；重连前先用 AT+CIPCLOSE 清理，再 AT+CIPSTART" },
+    "no ip":     { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "尚未获取到 IP 地址", "hint": "先等 WIFI GOT IP；一直拿不到查 DHCP、路由器连接数上限、AP 是否开了 MAC 过滤" },
+    "WIFI CONNECTED":  { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "已连上 AP（但还没拿到 IP）", "hint": "这是中间态——要等 WIFI GOT IP 才能做 TCP/HTTP" },
+    "WIFI GOT IP":     { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "已从 AP 获取到 IP，网络就绪", "hint": "此后才能 AT+CIPSTART；若紧接 TCP 仍失败，查目标服务器与端口" },
+    "WIFI DISCONNECT": { "source": "Espressif ESP-AT 用户指南 · 基础 AT 指令集（通用响应）", "meaning": "WiFi 连接断开", "hint": "查信号强度（AT+CWJAP? 或 RSSI）、省电模式（modem sleep 会导致间歇掉线）、供电是否够" }
+  }
+}

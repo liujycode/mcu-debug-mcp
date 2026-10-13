@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcu-debug-mcp"
+version = "4.5.0"
+description = "嵌入式硬件调试 MCP：串口直连 + 直连调试器读芯片身份/复位原因 + 烧录后逐字节校验 + 45 条异常模式库 + 三引擎引脚检测 + 板级知识库 + 会话持久化 + 预验证驱动库 + 报文解析（自定义帧/NMEA）"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "mcu-debug-mcp contributors" }]
+keywords = ["mcp", "embedded", "serial", "stm32", "esp32", "arduino", "graduation-project"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C",
+    "Topic :: Software Development :: Embedded Systems",
+]
+# 核心依赖只有 MCP 框架本身；串口/烧录能力按需安装（优雅降级不炸）
+dependencies = ["mcp>=1.0"]
+
+[project.optional-dependencies]
+serial = ["pyserial>=3.5"]
+debug = ["pyocd>=0.36"]
+all = ["pyserial>=3.5", "pyocd>=0.36"]
+
+[project.scripts]
+mcu-debug-mcp = "server:main"
+
+# 平铺模块布局；knowledge/ 与 drivers/ 由 setup.py 的 build_py 钩子整份带进产物
+# （package-data 对 py-modules 不生效——这正是曾经「装出来是空壳」的根因）
+[tool.setuptools]
+py-modules = ["server", "core", "analyzer", "paths", "guard"]

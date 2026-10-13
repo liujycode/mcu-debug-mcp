@@ -1,0 +1,28 @@
+# 构建产物
+build_tmp/
+build/
+dist/
+*.egg-info/
+*.o
+*.exe
+tests/test_driver_logic.exe
+tests/test_driver_logic
+
+# 故障演示固件的编译产物（源码在仓里，产物由 tools/fault_demo_fw/build.py 现场生成）
+# ★ 注意别写成全局 *.map —— tests/fixtures/arm_mcu.map 是要入库的夹具
+tools/fault_demo_fw/fault_demo.bin
+tools/fault_demo_fw/fault_demo.elf
+tools/fault_demo_fw/fault_demo.map
+
+# MCUDBG/1 桥固件的编译产物 + 真机读回件（源码与 live_check.txt 真机记录留档入库）
+tools/bridge_fw/fw.bin
+tools/bridge_fw/fw.elf
+tools/bridge_fw/fw.map
+tools/bridge_fw/restore_readback.bin
+
+# 缓存与测试残留（★测试产物一律写系统临时目录，这里只是兜底）
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.benchmarks/
+logs/

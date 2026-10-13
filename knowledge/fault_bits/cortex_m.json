@@ -1,0 +1,342 @@
+{
+  "id": "cortex_m_fault",
+  "desc": "ARM Cortex-M 系列故障状态寄存器位域表（CFSR / HFSR / BFAR / MMFAR / SHCSR）",
+  "arch": "cortex-m",
+  "source": "ARM Cortex-M3/M4/M7 Devices Generic User Guide (DUI 0553) 第 4 章 System Control Block；ARMv7-M Architecture Reference Manual (DDI 0403E) B3.2.15-B3.2.20",
+  "applies_to": "Cortex-M3 / M4 / M7 / M33（M0/M0+ 无 CFSR 分项，见 caveats）",
+  "registers": {
+    "CFSR": {
+      "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+      "addr_offset": "0xE000ED28",
+      "width": 32,
+      "address": "0xE000ED28",
+      "desc": "Configurable Fault Status Register。由三段拼成：MMFSR(bits 0-7) + BFSR(bits 8-15) + UFSR(bits 16-31)",
+      "segments": {
+        "MMFSR": {
+          "range": [
+            0,
+            7
+          ],
+          "name": "MemManage Fault Status",
+          "full_name": "Memory Management Fault Status Register（可单独按 0xE000ED28 字节访问）"
+        },
+        "BFSR": {
+          "range": [
+            8,
+            15
+          ],
+          "name": "BusFault Status",
+          "full_name": "Bus Fault Status Register（可单独按 0xE000ED29 字节访问）"
+        },
+        "UFSR": {
+          "range": [
+            16,
+            31
+          ],
+          "name": "UsageFault Status",
+          "full_name": "Usage Fault Status Register（可单独按 0xE000ED2A 半字访问）"
+        }
+      },
+      "bits": {
+        "IACCVIOL": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 0,
+          "segment": "MMFSR",
+          "meaning": "指令访问违规（Instruction access violation）",
+          "cause": "从 XN（Execute Never）区域取指。MPU 配置中该区域被标为不可执行",
+          "hint": "检查 MPU 配置：程序跳到了被标为 XN 的内存区。常见于函数指针被写坏、跳转到数据区",
+          "severity": "high"
+        },
+        "DACCVIOL": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 1,
+          "segment": "MMFSR",
+          "meaning": "数据访问违规（Data access violation）",
+          "cause": "访问了 MPU 禁止的数据区域",
+          "hint": "查 MMFAR 拿违规地址（须 MMFARVALID=1）。常见于数组越界写、野指针踩到受保护区",
+          "severity": "high"
+        },
+        "MUNSTKERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 3,
+          "segment": "MMFSR",
+          "meaning": "出栈时内存管理错误（MemManage fault on unstacking）",
+          "cause": "异常返回时从栈恢复现场，但栈地址落在非法区域",
+          "hint": "★栈指针已跑飞。几乎可以断定是栈溢出或栈被踩坏。查 SP 是否越界、任务栈是否设够",
+          "severity": "high"
+        },
+        "MSTKERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 4,
+          "segment": "MMFSR",
+          "meaning": "入栈时内存管理错误（MemManage fault on stacking）",
+          "cause": "异常进入时压栈，但栈地址落在非法区域",
+          "hint": "★同 MUNSTKERR，栈指针跑飞。优先查栈溢出",
+          "severity": "high"
+        },
+        "MLSPERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 5,
+          "segment": "MMFSR",
+          "meaning": "浮点惰性保存时 MemManage 错误",
+          "cause": "FPU 惰性压栈（lazy stacking）过程中访问非法内存",
+          "hint": "与 FPU 惰性压栈相关。若开了 FPU 且用浮点，栈问题会在这里暴露",
+          "severity": "medium"
+        },
+        "MMARVALID": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 7,
+          "segment": "MMFSR",
+          "meaning": "MMFAR 有效标志（MMFAR valid）",
+          "cause": "MMFAR 中记录的地址是否有效",
+          "hint": "★这条必须先查！本位置 0 时 MMFAR 是垃圾值，读它得出的地址是错的。只有置 1 时才能信 MMFAR",
+          "severity": "info"
+        },
+        "IBUSERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 8,
+          "segment": "BFSR",
+          "meaning": "指令总线错误（Instruction bus error）",
+          "cause": "取指时总线报错——PC 指向了一个没法取指的地方",
+          "hint": "★PC 跑飞了。查 PC 当前值反查符号（多半不在任何合法函数里）。常见于函数指针为空/被写坏、跳转表越界",
+          "severity": "high"
+        },
+        "PRECISERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 9,
+          "segment": "BFSR",
+          "meaning": "精确数据总线错误（Precise data bus error）",
+          "cause": "数据访问总线报错，且异常是精确的——出错指令可确定",
+          "hint": "★BFAR 里的地址可信（须 BFARVALID=1），可直接反查。常见于访问了未使能时钟的外设寄存器（如忘了开 RCC 时钟就写寄存器）、地址算错",
+          "severity": "high"
+        },
+        "IMPRECISERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 10,
+          "segment": "BFSR",
+          "meaning": "非精确数据总线错误（Imprecise data bus error）",
+          "cause": "写缓冲延迟导致异常发生时，出错指令可能已经执行过去了",
+          "hint": "★★BFAR 里的地址【不可信】！总线写是异步的，报出的地址跟真正出错的地址没关系。只能当「有个总线访问出错」的信号，不能按地址去查代码。定位要靠前后文推断 + 二分法收缩",
+          "severity": "high"
+        },
+        "UNSTKERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 11,
+          "segment": "BFSR",
+          "meaning": "出栈时总线错误（Bus fault on unstacking）",
+          "cause": "异常返回时从栈恢复现场，栈地址总线报错",
+          "hint": "★栈指针跑飞 + 总线错误。查栈是否溢出、SP 是否被写坏",
+          "severity": "high"
+        },
+        "STKERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 12,
+          "segment": "BFSR",
+          "meaning": "入栈时总线错误（Bus fault on stacking）",
+          "cause": "异常进入时压栈，栈地址总线报错",
+          "hint": "★同 UNSTKERR。入栈就失败，基本是栈问题",
+          "severity": "high"
+        },
+        "LSPERR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 13,
+          "segment": "BFSR",
+          "meaning": "浮点惰性保存时总线错误",
+          "cause": "FPU 惰性压栈过程中总线报错",
+          "hint": "与 FPU 惰性压栈相关，根因仍是栈",
+          "severity": "medium"
+        },
+        "BFARVALID": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 15,
+          "segment": "BFSR",
+          "meaning": "BFAR 有效标志（BFAR valid）",
+          "cause": "BFAR 中记录的地址是否有效",
+          "hint": "★这条必须先查！本位置 0 时 BFAR 是垃圾值。且注意：只有 PRECISERR 时 BFAR 才真的指向出错地址，IMPRECISERR 时即使 valid 也没参考价值",
+          "severity": "info"
+        },
+        "UNDEFINSTR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 16,
+          "segment": "UFSR",
+          "meaning": "未定义指令（Undefined instruction）",
+          "cause": "执行了 CPU 不认识的指令编码",
+          "hint": "★PC 处的内容不是合法指令。常见于：跳到数据区执行、函数指针错、flash 内容损坏、用错架构的库（如把 M4 的库链到 M0 上）",
+          "severity": "high"
+        },
+        "INVSTATE": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 17,
+          "segment": "UFSR",
+          "meaning": "无效状态（Invalid state）",
+          "cause": "试图切到无效的指令集状态（如 EPSR.T 位为 0 时执行 ARM 指令、bx 到地址 bit0=0）",
+          "hint": "★函数指针的 bit0（Thumb 位）丢了。常见于：函数指针被赋值时丢了最低位、跳转地址算错没加 1。查跳转/回调的地址计算",
+          "severity": "high"
+        },
+        "INVPC": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 18,
+          "segment": "UFSR",
+          "meaning": "无效 PC（Invalid PC load）",
+          "cause": "异常返回时加载的 PC 无效",
+          "hint": "★栈里的返回地址被踩坏了。查栈溢出、栈上缓冲区溢出（如数组越界写覆盖了局部变量）",
+          "severity": "high"
+        },
+        "NOCP": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 19,
+          "segment": "UFSR",
+          "meaning": "协处理器不存在（No coprocessor）",
+          "cause": "访问了未使能/不存在的协处理器（最常见是 FPU）",
+          "hint": "用了浮点但没使能 FPU（Cortex-M4/M7 的 FPU 默认关）。查启动代码是否开了 CPACR 的 FPU 位，编译器是否指定了正确的浮点 ABI",
+          "severity": "medium"
+        },
+        "STKOF": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 20,
+          "segment": "UFSR",
+          "meaning": "栈溢出（Stack overflow）——仅 Cortex-M33/M35P 有此位",
+          "cause": "硬件栈溢出检测（STKOF）触发，栈指针超出 MSPLIM/PSPLIM",
+          "hint": "★硬件直接判定栈溢出。查 MSPLIM/PSPLIM 阈值、加大栈、找递归或大局部数组",
+          "severity": "high"
+        },
+        "UNALIGNED": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 24,
+          "segment": "UFSR",
+          "meaning": "非对齐访问（Unaligned access）",
+          "cause": "执行了非对齐的内存访问（且 SCB->CCR 的 UNALIGN_TRP 位使能）",
+          "hint": "默认关闭未对齐陷阱（除多字指令 LDM/STM）。若报出说明开了 UNALIGN_TRP。查结构体打包、指针强转导致的非对齐",
+          "severity": "medium"
+        },
+        "DIVBYZERO": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 25,
+          "segment": "UFSR",
+          "meaning": "除零（Divide by zero）",
+          "cause": "执行了除零（且 SCB->CCR 的 DIV_0_TRP 位使能）",
+          "hint": "默认关闭除零陷阱。若报出说明开了 DIV_0_TRP——好事，直接找到了 bug 点。查除法/取模的分母",
+          "severity": "medium"
+        }
+      }
+    },
+    "HFSR": {
+      "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+      "addr_offset": "0xE000ED2C",
+      "width": 32,
+      "address": "0xE000ED2C",
+      "desc": "HardFault Status Register。HardFault 是各类故障的「兜底」——很多故障最终都升级成 HardFault",
+      "bits": {
+        "VECTTBL": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 1,
+          "meaning": "向量表读取错误（Vector table hard fault）",
+          "cause": "取向量表时总线出错——中断向量表位置不对或不可访问",
+          "hint": "★查 SCB->VTOR 是否正确指向向量表。常见于：OTA 跳转 APP 忘了重设 VTOR、向量表被放到不可访问区域、向量表被擦除",
+          "severity": "high"
+        },
+        "FORCED": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 30,
+          "meaning": "强制升级为 HardFault（Forced hard fault）",
+          "cause": "某个可配置故障（MemManage/BusFault/UsageFault）被禁用或屏蔽，于是被升级成 HardFault",
+          "hint": "★本位置 1 说明【真正的故障在 CFSR 里】。必须去读 CFSR 定位实际原因，只看 HFSR 会漏掉根因。这是最常见的情况",
+          "severity": "info"
+        },
+        "DEBUGEVT": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 31,
+          "meaning": "调试事件（Debug event）",
+          "cause": "调试相关事件触发了 HardFault（如断点、向量捕获）",
+          "hint": "多为调试器介入导致。去掉断点/调试配置再试；也有可能是软件触发了调试监视点",
+          "severity": "low"
+        }
+      }
+    },
+    "BFAR": {
+      "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+      "addr_offset": "0xE000ED38",
+      "width": 32,
+      "address": "0xE000ED38",
+      "desc": "BusFault Address Register。记录触发总线错误的地址",
+      "valid_flag": "BFARVALID（CFSR 的 bit15）",
+      "bits": {
+        "ADDR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 0,
+          "width": 32,
+          "meaning": "触发总线错误的地址",
+          "cause": "总线错误发生的地址",
+          "hint": "★先确认 BFARVALID=1 才能用。且只有 PRECISERR 时才是精确地址；IMPRECISERR 时报的地址不可信。拿到地址后用 symbol_lookup 反查函数",
+          "severity": "high"
+        }
+      }
+    },
+    "MMFAR": {
+      "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+      "addr_offset": "0xE000ED34",
+      "width": 32,
+      "address": "0xE000ED34",
+      "desc": "MemManage Fault Address Register。记录触发内存管理错误的地址",
+      "valid_flag": "MMARVALID（CFSR 的 bit7）",
+      "bits": {
+        "ADDR": {
+          "source": "ARM DUI 0553 第 4 章 System Control Block；ARMv7-M DDI 0403E B3.2.15-B3.2.20",
+          "bit": 0,
+          "width": 32,
+          "meaning": "触发内存管理错误的地址",
+          "cause": "MPU 违规时访问的地址",
+          "hint": "★先确认 MMARVALID=1 才能用。拿到地址后用 symbol_lookup 反查函数",
+          "severity": "high"
+        }
+      }
+    }
+  },
+  "stack_frame": {
+    "desc": "Cortex-M 异常入栈的硬件压栈帧。HardFault handler 里拿到的栈内容",
+    "standard_frame": {
+      "source": "ARMv7-M Architecture Reference Manual (DDI 0403E)：异常入栈与 EXC_RETURN",
+      "note": "无 FPU 或未使能惰性压栈时的标准栈帧（8 字，按入栈顺序）",
+      "words": [
+        "R0",
+        "R1",
+        "R2",
+        "R3",
+        "R12",
+        "LR",
+        "PC",
+        "xPSR"
+      ],
+      "detail": {
+        "PC": "★出错时的程序计数器——这就是要找的地址！用 symbol_lookup 反查",
+        "LR": "调用者的返回地址（错在哪一步被调用）",
+        "xPSR": "程序状态寄存器，含 IPSR（当前异常号）、T 位（Thumb 状态）"
+      }
+    },
+    "extended_frame": {
+      "source": "ARMv7-M Architecture Reference Manual (DDI 0403E)：异常入栈与 EXC_RETURN",
+      "note": "使能 FPU 惰性压栈时的扩展栈帧（额外 18 字，S0-S15 + FPSCR + 保留字）",
+      "extra_words": 18,
+      "desc": "含 S0-S15、FPSCR、一个保留字。解析时要先判断是否有扩展帧（看 EXC_RETURN 的 bit4）"
+    },
+    "exc_return": {
+      "source": "ARMv7-M Architecture Reference Manual (DDI 0403E)：异常入栈与 EXC_RETURN",
+      "desc": "异常返回码（LR 的值），在 handler 入口时决定返回方式",
+      "bits": {
+        "bit4": "0=使用扩展栈帧（FPU 惰性压栈），1=标准栈帧",
+        "bit3": "0=返回后用 MSP，1=返回后用 PSP（即异常前是线程模式用 PSP，如 RTOS 任务）",
+        "bit2": "0=返回 Thread 模式，1=返回 Handler 模式"
+      },
+      "hint": "★bit3 决定去哪个栈找栈帧！RTOS 任务里出的 fault，栈帧在 PSP；裸机/中断里的在 MSP。搞错栈就找到垃圾数据"
+    },
+    "stacking_hint": "★双重故障（double fault）时第二个故障无法压栈，会进入 lockup，此时栈帧不可读。若看到程序卡死无输出，先查是否 lockup"
+  },
+  "caveats": [
+    "Cortex-M0/M0+ 不支持 CFSR/HFSR 的分项诊断：没有 MemManage/BusFault/UsageFault，所有故障都进 HardFault，且无 BFAR/MMFAR。判定路径不同，不能套用本表",
+    "Cortex-M23/M33 起有 TrustZone（安全/非安全双世界），fault 寄存器也分 Secure/Non-secure 两套（SAU/IDAU 相关），地址偏移加 0x0 或 0x100 区分。本表给的是 Non-secure 侧（常规）地址",
+    "FORCED 位是理解 HardFault 的钥匙：它置 1 说明真正的故障类型记录在 CFSR 里，必须去读 CFSR，不能停在 HFSR",
+    "IMPRECISERR 的 BFAR 地址不可用于定位——这是最容易被误用的地方，很多调试教程没讲清",
+    "BFARVALID/MMARVALID 为 0 时 BFAR/MMFAR 内容是上次的残留值或垃圾值，读出来是假地址",
+    "栈帧布局受编译器优化和 ABI 影响：某些编译器会调整寄存器保存顺序，但硬件压栈帧的 8 字顺序是架构固定的"
+  ]
+}

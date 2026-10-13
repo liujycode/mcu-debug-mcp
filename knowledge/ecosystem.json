@@ -1,0 +1,123 @@
+{
+  "id": "ecosystem",
+  "desc": "嵌入式生态/框架识别：工程产物、构建配置、日志特征（用于识别「这是什么工程」与读懂它的报错）",
+  "source": "各生态官方文档；每条带条目级 source",
+  "entries": {
+    "zephyr": {
+      "source": "Zephyr Project 官方文档 docs.zephyrproject.org（West / Kconfig / Devicetree / 构建输出目录）",
+      "name": "Zephyr RTOS",
+      "project_markers": [
+        "west.yml —— West manifest（多仓库管理）",
+        "prj.conf —— 应用侧 Kconfig 配置",
+        "CMakeLists.txt + boards/<板名>.overlay —— 设备树覆盖",
+        "构建命令：west build -b <board>"
+      ],
+      "build_outputs": [
+        "build/zephyr/zephyr.elf",
+        "build/zephyr/zephyr.hex",
+        "build/zephyr/zephyr.map"
+      ],
+      "log_signatures": [
+        "*** Booting Zephyr OS build v3.x.x ***",
+        "日志分级形如 E: / W: / I: / D:，后接模块名（如 E: uart: ...）"
+      ],
+      "gotchas": "Kconfig 选项名写错（CONFIG_ 前缀拼错）**不会报错**，对应驱动只是静默不编译——「功能没生效」先查 prj.conf 与 build/zephyr/.config 里该 CONFIG 到底是不是 y；devicetree overlay 不生效多数是文件名/路径不符合 <board>.overlay 约定。"
+    },
+    "rtthread": {
+      "source": "RT-Thread 官方文档 rt-thread.org（SCons 构建 / rtconfig.h / Kconfig / Finsh msh 控制台）",
+      "name": "RT-Thread",
+      "project_markers": [
+        "rtconfig.h —— 由 menuconfig/Kconfig 生成的配置头",
+        "SConstruct + SConscript —— SCons 构建脚本（源文件靠 SConscript 递归收集）",
+        "rt-thread/ 源码目录 + board/ 板级目录",
+        "构建命令：scons"
+      ],
+      "build_outputs": [
+        "rtthread.elf / rtthread.bin（位置随 BSP，常见 build/ 或 Debug/）"
+      ],
+      "log_signatures": [
+        "启动打印 RT-Thread 的 ASCII logo（\\ | / 组合的版本横幅）",
+        "Finsh/msh 命令行提示符：msh />"
+      ],
+      "gotchas": "rtconfig.h 是**生成物**，手改会在下次 menuconfig/scons 时被覆盖——要改配置请改 Kconfig 或 menuconfig 重新生成；新增 .c 文件忘了在对应 SConscript 里登记，就不参与编译（表现为「函数未定义」）。"
+    },
+    "platformio": {
+      "source": "PlatformIO 官方文档 docs.platformio.org（platformio.ini / .pio 构建目录 / pio run 输出格式）",
+      "name": "PlatformIO",
+      "project_markers": [
+        "platformio.ini —— 工程配置（[env:xxx] 分环境）",
+        ".pio/ 构建缓存目录",
+        "src/ 与 lib/ 标准目录结构",
+        "命令：pio run / pio run -t upload / pio device monitor"
+      ],
+      "build_outputs": [
+        ".pio/build/<env>/firmware.elf",
+        ".pio/build/<env>/firmware.bin",
+        ".pio/build/<env>/firmware.hex"
+      ],
+      "log_signatures": [
+        "Processing <env> (platform: ...; board: ...)",
+        "RAM:   [==        ]  x.x% (used N bytes from M bytes)",
+        "Flash: [===       ]  x.x% (used N bytes from M bytes)"
+      ],
+      "gotchas": "多环境时改错了 [env:...] 段；库依赖写在 lib_deps（不是手动拷 lib/）；上传/监视串口由 upload_port / monitor_port 决定，板子换了口要改 ini。"
+    },
+    "keil": {
+      "source": "Keil MDK 官方文档 keil.com（μVision 工程文件 / armclang 与 armcc 编译器输出 / 链接错误码 Lxxxx）",
+      "name": "Keil MDK（μVision）",
+      "project_markers": [
+        "*.uvprojx（新版）/ *.uvproj（旧版）—— 工程文件",
+        "*.uvoptx —— 用户选项（调试器、断点）",
+        "Objects/ Listings/ RTE/ 目录"
+      ],
+      "build_outputs": [
+        "Objects/*.axf（ELF 格式，可给 parse_map / symbol_lookup）",
+        "Objects/*.hex",
+        "Listings/*.map（链接映射，本工具 parse_map 可直接吃）"
+      ],
+      "log_signatures": [
+        "*** Using Compiler 'V5.06 update x (build x)', folder: ...（AC5）或 'V6.x' （AC6/armclang）",
+        "Program Size: Code=... RO-data=... RW-data=... ZI-data=..."
+      ],
+      "gotchas": "链接错误 L6218E（Undefined symbol）= 源文件没加进工程或库没勾选；L6406E（No space in execution regions）= Flash/RAM 装不下（改 scatter 文件或关掉大功能）；AC5 与 AC6 语法不同（C99/C11、内联汇编写法），换编译器后老代码可能编不过。"
+    },
+    "iar": {
+      "source": "IAR EWARM 官方文档 iar.com（工程文件 .ewp/.eww / ICCARM+ILINK 输出 / 错误码前缀 Pe 与 Li）",
+      "name": "IAR Embedded Workbench for ARM",
+      "project_markers": [
+        "*.ewp —— 工程文件",
+        "*.eww —— 工作区文件",
+        "settings/ 与 Debug/ Release/ 目录"
+      ],
+      "build_outputs": [
+        "Debug/Exe/*.out（ELF 格式）",
+        "Debug/List/*.map"
+      ],
+      "log_signatures": [
+        "编译期：Error[Pe1696]: cannot open source file \"...\"",
+        "链接期：Error[Li005]: no definition for \"...\" [referenced from ...]",
+        "汇总行：Errors: N, Warnings: M"
+      ],
+      "gotchas": "错误码前缀直接区分阶段——**Pe/Pa 是编译期**，**Li 是链接期（ILINK）**；Li005 是「有声明没定义」，先把对应的 .c/.a 加进工程或库搜索路径；内存布局由 .icf 链接脚本决定，换芯片要同步换 icf。"
+    },
+    "rust_defmt": {
+      "source": "embedded Rust 生态官方文档（defmt / probe-rs / cargo 交叉编译与 .cargo/config.toml runner）",
+      "name": "Rust（embedded-* + defmt）",
+      "project_markers": [
+        "Cargo.toml —— 依赖和 panic 策略",
+        ".cargo/config.toml —— target 与 runner（常见 runner = \"probe-rs run\"）",
+        "memory.x —— 链接脚本（Flash/RAM 布局）",
+        "rust-toolchain.toml —— 钉住 target（如 thumbv7em-none-eabihf）"
+      ],
+      "build_outputs": [
+        "target/thumbv7em-none-eabihf/debug/<crate 名>.elf",
+        "target/<triple>/release/<crate 名>.elf（同样可给 symbol_lookup 用）"
+      ],
+      "log_signatures": [
+        "defmt 的输出是**压缩二进制**，经 RTT 送出——直接用串口看就是乱码，必须由 probe-rs / defmt 解码器渲染",
+        "panic 信息形如：panicked at src/main.rs:42:5"
+      ],
+      "gotchas": "把 defmt 日志当文本读必然乱码（它不是 ASCII）；no_std 工程必须有 panic_handler 与 #[entry]，否则链接报缺符号；.cargo/config.toml 里 runner 写错会「编译成功但烧录/运行连不上」。"
+    }
+  }
+}

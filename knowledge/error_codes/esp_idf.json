@@ -1,0 +1,24 @@
+{
+  "id": "esp_idf",
+  "desc": "ESP-IDF esp_err_t 常见错误码（esp_err.h 通用段 + flash 组件段）",
+  "source": "Espressif ESP-IDF 官方 API 参考 · Error Codes（esp_err.h）：0x101-0x10D 为通用错误段，0x6000 起为 flash 组件段",
+  "entries": {
+    "-1":    { "source": "Espressif ESP-IDF esp_err.h：ESP_FAIL", "meaning": "ESP_FAIL 通用失败", "hint": "多数是「上一次调用返回了非 ESP_OK」被直接上传——往上翻一行看真正报错的那个 API" },
+    "0x101": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_NO_MEM", "meaning": "ESP_ERR_NO_MEM 内存不足", "hint": "malloc/队列/TLS 缓冲失败。查堆剩余（esp_get_free_heap_size）、任务栈是否开太大、有没有内存泄漏" },
+    "0x102": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_ARG", "meaning": "ESP_ERR_INVALID_ARG 参数无效", "hint": "传给 API 的参数不合法（空指针、越界、句柄为 NULL）——查上一行的调用参数" },
+    "0x103": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_STATE", "meaning": "ESP_ERR_INVALID_STATE 状态无效", "hint": "顺序错了——比如没 init 就调用、没 connect 就 send。查初始化顺序与状态机" },
+    "0x104": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_SIZE", "meaning": "ESP_ERR_INVALID_SIZE 长度/大小无效", "hint": "传入的 buffer 长度与实际不符（如 len 大于缓冲区）——常见于串口/网络收包长度算错" },
+    "0x105": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_NOT_FOUND", "meaning": "ESP_ERR_NOT_FOUND 未找到", "hint": "要找的对象不存在——NVS 键没写过、分区名拼错、设备没挂在总线上" },
+    "0x106": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_NOT_SUPPORTED", "meaning": "ESP_ERR_NOT_SUPPORTED 不支持该操作", "hint": "该芯片/该配置不支持此功能——查是否用了别的型号才有的外设或功能" },
+    "0x107": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_TIMEOUT", "meaning": "ESP_ERR_TIMEOUT 超时", "hint": "等待超时——总线无应答（I2C/SPI 设备没接好）、对方无响应、超时值太小" },
+    "0x108": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_RESPONSE", "meaning": "ESP_ERR_INVALID_RESPONSE 响应无效", "hint": "收到的应答不符合协议（CRC/帧头/长度错）——查对端设备与接线" },
+    "0x109": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_CRC", "meaning": "ESP_ERR_INVALID_CRC 校验失败", "hint": "CRC 对不上——数据传输出错、flash 内容损坏、或协议两端 CRC 算法不一致" },
+    "0x10A": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_VERSION", "meaning": "ESP_ERR_INVALID_VERSION 版本无效", "hint": "固件/数据结构版本不匹配——常见于 OTA 分区里的旧数据被新固件读" },
+    "0x10B": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_INVALID_MAC", "meaning": "ESP_ERR_INVALID_MAC 无效 MAC", "hint": "eFuse 里的 MAC 为空或全 FF——芯片 eFuse 未烧写或被读保护" },
+    "0x10C": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_NOT_FINISHED", "meaning": "ESP_ERR_NOT_FINISHED 操作未完成", "hint": "异步/分片操作还没做完就查询——需要轮询到完成后才能取结果" },
+    "0x10D": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_NOT_ALLOWED", "meaning": "ESP_ERR_NOT_ALLOWED 操作不被允许", "hint": "当前模式下禁止——例如 flash 加密/安全启动已启用时执行受限操作" },
+    "0x6000": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_FLASH_BASE", "meaning": "ESP_ERR_FLASH_BASE flash 组件错误段基址", "hint": "flash 相关错误的基准值，真实错误码小于它——出现 0x6xxx 都先查分区表与 flash 接线" },
+    "0x6001": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_FLASH_OP_FAIL", "meaning": "ESP_ERR_FLASH_OP_FAIL flash 操作失败", "hint": "擦写 flash 失败——查分区表地址是否越界、flash 型号配置（CONFIG_ESPTOOLPY_FLASHSIZE）是否与实际芯片一致" },
+    "0x6002": { "source": "Espressif ESP-IDF esp_err.h：ESP_ERR_FLASH_OP_TIMEOUT", "meaning": "ESP_ERR_FLASH_OP_TIMEOUT flash 操作超时", "hint": "flash 访问超时——多为 SPI flash 引脚被复用/接触不良，或 flash 处于低功耗模式未唤醒" }
+  }
+}

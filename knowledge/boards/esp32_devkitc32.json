@@ -1,0 +1,23 @@
+{
+  "board": "ESP32-DevKitC-32E（ESP32-WROOM-32E 核心板）",
+  "alias": ["esp32devkitc", "esp32-devkitc", "esp32 devkitc", "esp32开发板"],
+  "mcu": "esp32dev",
+  "source": "Espressif ESP32-DevKitC 官方用户指南（V1.1）+ ESP32-WROOM-32 数据手册（管脚说明）+ ESP32 技术参考手册（Strapping 管脚 / IO_MUX 章节）",
+  "onboard": {
+    "LED_BLUE": { "source": "Espressif ESP32-DevKitC 官方用户指南（板载 LED 部分）", "pin": "GPIO2", "active": "high", "note": "板载蓝色 LED 接 GPIO2，高电平点亮。注意 GPIO2 同时是 strapping 脚，外接下拉会干扰启动" },
+    "USB_TO_UART": { "source": "Espressif ESP32-DevKitC 官方用户指南（USB 转串口部分）", "pins": ["GPIO1", "GPIO3"], "note": "板载 CP2102N 接 U0TXD(GPIO1)/U0RXD(GPIO3)：这俩是下载与日志口，占用后就没法烧录/看日志" },
+    "BUTTON_EN": { "source": "Espressif ESP32-DevKitC 官方用户指南（按键部分）", "pin": "EN", "note": "EN 按键=复位，按下拉低芯片使能脚" },
+    "BUTTON_BOOT": { "source": "Espressif ESP32-DevKitC 官方用户指南（按键部分）", "pin": "GPIO0", "note": "BOOT 按键接 GPIO0：按住再按 EN 进入下载模式。GPIO0 是 strapping 脚，运行时勿强拉低" }
+  },
+  "board_issues": [
+    "GPIO6-GPIO11 接内部 SPI flash：这 6 个脚绝对的禁区，谁用谁死（芯片直接不启动或跑飞）",
+    "GPIO34-GPIO39 是【仅输入】脚：没有输出驱动、没有内部上拉/下拉，做输出无效（这是 ESP32 最反直觉的坑）",
+    "Strapping 脚 5 个：GPIO0(启动模式)、GPIO2(下载模式/板载 LED)、GPIO5、GPIO12(MTDI，决定 flash 电压)、GPIO15(MTDO)。上电瞬间的电平决定启动方式，外接电路别乱拉",
+    "GPIO12 (MTDI) 被外部上拉会导致 1.8V flash 配置误判，芯片可能不启动——接 SPI/外设时特别小心这个脚",
+    "ADC2 通道与 WiFi 互斥：WiFi 开启时读 ADC2（GPIO0/2/4/12-15/25-27）会失败，要用 ADC 就选 ADC1（GPIO32-39）",
+    "电容触摸脚（T0-T9）与 ADC2 重合，且对噪声敏感，长走线会误触发",
+    "U0RXD/U0TXD（GPIO3/GPIO1）默认接 USB 桥：想当普通串口用可以，但会失去日志输出与自动下载",
+    "板载 3.3V LDO 供电能力有限（约 500mA）：WiFi 发射瞬间电流尖峰大，外设多/线长时容易欠压复位（现象：连 WiFi 就重启）"
+  ],
+  "power_notes": "VIN/5V 脚可接 USB 5V 或外部 5V（板载 LDO 转 3.3V）；3V3 脚只能小电流输出。ESP32 射频工作时峰值电流可达 500mA 以上，供电线要粗、电容要够，否则会欠压复位。3.3V 电平，非 5V 容忍（GPIO 不要直接接 5V 信号）"
+}

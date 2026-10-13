@@ -1,0 +1,309 @@
+{
+  "version": "1.0.0",
+  "desc": "可外置故障模式规则（正则模式类）。新增规则直接加条目，无需改代码。",
+  "source": "各条规则逐条标注依据（工具链错误输出样式 / 芯片手册 / 社区案例），详见每条 rule 的 source 字段",
+  "conventions": {
+    "patterns": "Python re 正则数组，任一命中即算命中，evidence 取匹配文本",
+    "severity": "high | medium | low",
+    "source": "规则的依据来源（手册/工具名），领域级可信度要求逐条标注"
+  },
+  "rules": [
+    {
+      "id": "STLINK_CONNECT_FAIL",
+      "name": "ST-Link 连接失败",
+      "severity": "high",
+      "patterns": [
+        "(?i)ST-LINK\\s+(?:error|connection\\s+error|connect\\s+failed)",
+        "(?i)No\\s+target\\s+connected",
+        "(?i)Cannot\\s+connect\\s+to\\s+target",
+        "(?i)No\\s+ST-LINK\\s+detected",
+        "(?i)usb_open\\s+error"
+      ],
+      "diagnosis": "调试器与目标芯片之间没建立连接：物理链路（USB/SWD 线）或目标供电/复位状态的问题，与固件无关。",
+      "next_steps": [
+        "查 SWD 四线：SWDIO/SWCLK/GND/3.3V 是否插对——SWDIO/SWCLK 接反是头号坑",
+        "换 USB 线/USB 口（供电不足会让 ST-Link 反复掉线）",
+        "目标板没上电或复位脚被拉死：确认板上电源灯亮、RESET 不被按住",
+        "Keil/CubeProgrammer 里手动 Connect under reset 模式再试",
+        "拔插 ST-Link 并确认设备管理器识别（需装 ST 官方驱动）"
+      ],
+      "source": "ST-LINK Utility / STM32CubeProgrammer / Keil 错误输出样式"
+    },
+    {
+      "id": "KEIL_NO_ALGO",
+      "name": "Keil 找不到 Flash 算法",
+      "severity": "high",
+      "patterns": [
+        "(?i)No\\s+Algorithm\\s+found\\s+for",
+        "(?i)No\\s+Algorithm\\s+found"
+      ],
+      "diagnosis": "Keil 的烧录配置里没有目标芯片 Flash 的编程算法（FLM 文件），跟代码无关，是工程配置缺了一块。",
+      "next_steps": [
+        "Options for Target → Debug → Settings → Flash Download → Add，加对应容量的算法（如 STM32F10x Med-density 128K）",
+        "选错容量算法也会报错：芯片是 64K 就选 64K/128K 通用条目",
+        "新装 Keil 缺器件包：Pack Installer 里装对应芯片器件包（DFP）再重试"
+      ],
+      "source": "Keil MDK Flash Download 错误输出样式"
+    },
+    {
+      "id": "KEIL_FLASH_DL_FAIL",
+      "name": "Keil Flash 下载失败",
+      "severity": "high",
+      "patterns": [
+        "(?i)Flash\\s+Download\\s+failed",
+        "(?i)(?:axf|\\.hex|flash|download|image)[^\\r\\n]{0,30}cannot\\s+be\\s+loaded",
+        "(?i)cannot\\s+be\\s+loaded[^\\r\\n]{0,30}(?:axf|\\.hex|flash|target)",
+        "(?i)Flash\\s+Timeout",
+        "(?i)Verify\\s+failed(?!\\s+content)"
+      ],
+      "diagnosis": "烧录过程中与目标通信/擦写失败：SWD 信号质量、供电、或芯片被锁。",
+      "next_steps": [
+        "降 SWD 时钟：Debug Settings 里 Max Clock 从 4MHz 降到 1MHz 以下再试（杜邦线长/面包板必降）",
+        "确认芯片供电稳定（外设多时烧录瞬间掉电会 Verify failed）",
+        "Connect under reset + 按住 RESET 再松开的组合拳",
+        "仍失败：怀疑读保护被开（见 RDP 提示）或芯片损坏，用 STM32CubeProgrammer 全片擦除试"
+      ],
+      "source": "Keil MDK Flash Download 错误输出样式"
+    },
+    {
+      "id": "OPENOCD_TARGET_FAIL",
+      "name": "OpenOCD 目标初始化失败",
+      "severity": "high",
+      "patterns": [
+        "(?i)Error:\\s+init\\s+mode\\s+failed",
+        "(?i)target\\s+examination\\s+failed",
+        "(?i)Expects\\s+SRST",
+        "(?i)Error:\\s+(?:DP|AP)\\s+initialisation\\s+failed"
+      ],
+      "diagnosis": "OpenOCD 与目标芯片 SWD/JTAG 握手失败：接线、时钟、或复位时序问题。",
+      "next_steps": [
+        "核对 -f 接口配置与 -f 目标配置两个文件是否匹配所用调试器和芯片",
+        "SWD 线短一点：>20cm 的杜邦线高频下信号质量极差",
+        "加 srstonly 复位模式或 reset_config srst_nogate 重试",
+        "芯片在读保护状态：先 unlock（会清全片 flash）"
+      ],
+      "source": "OpenOCD 错误输出样式"
+    },
+    {
+      "id": "ESPTOOL_FAIL",
+      "name": "esptool 烧录连接失败",
+      "severity": "high",
+      "patterns": [
+        "(?i)A\\s+fatal\\s+error\\s+occurred",
+        "(?i)Failed\\s+to\\s+connect\\s+to\\s+ESP",
+        "(?i)Wrong\\s+boot\\s+mode\\s+detected",
+        "(?i)Invalid\\s+head\\s+of\\s+packet",
+        "(?i)Timed\\s+out\\s+waiting\\s+for\\s+packet\\s+header"
+      ],
+      "diagnosis": "esptool 进不了下载模式（Download Bootloader）：串口信号、复位时序、或 BOOT 引脚状态不对。",
+      "next_steps": [
+        "手动进下载模式：GPIO0 接 GND（或按住 BOOT 键）再上电/复位，然后点烧录",
+        "降波特率到 115200（921600 对线材要求高）",
+        "ESP-01 类小板：IO15 拉低、EN 拉高、CH_PD 拉高一个都不能少",
+        "换 USB 转 TTL 并确认 3.3V 供电 ≥500mA",
+        "Wrong boot mode：烧录工具连的是别的串口（如板载 USB 而不是 UART0）"
+      ],
+      "source": "esptool 错误输出样式 + Espressif 下载模式文档"
+    },
+    {
+      "id": "PYOCD_PROBE_FAIL",
+      "name": "pyOCD 找不到调试器/目标",
+      "severity": "high",
+      "patterns": [
+        "(?i)No\\s+connected\\s+probes",
+        "(?i)Board\\s+is\\s+not\\s+powered",
+        "(?i)Probe\\s+communication\\s+failed",
+        "(?i)ERROR:\\s+failed\\s+to\\s+create\\s+target"
+      ],
+      "diagnosis": "pyOCD 层面看不到调试器或目标芯片：USB 驱动、probe 类型、或目标包缺失。",
+      "next_steps": [
+        "pyocd list 确认调试器可见；Windows 装对应驱动（ST-Link 官方驱动 / DAPLink 免驱）",
+        "找不到 target：pyocd pack install <芯片名> 装器件包，或 --target 手动指定",
+        "DAPLink 板载调试器被固件占用：按住 RESET 插 USB 进 ISP 模式恢复",
+        "probe communication failed：换短线降时钟（--frequency 1000000）"
+      ],
+      "source": "pyOCD 错误输出样式"
+    },
+    {
+      "id": "FLASH_READOUT_PROTECT",
+      "name": "Flash 读保护（RDP）激活",
+      "severity": "high",
+      "patterns": [
+        "(?i)flash\\s+is\\s+protected",
+        "(?i)readout\\s+protection",
+        "(?i)\\bRDP\\b.{0,30}(?:active|enabled|level)",
+        "(?i)Can\\s*not\\s+unlock",
+        "(?i)flash\\s+delete\\s+protected"
+      ],
+      "diagnosis": "芯片开了读保护：擦写被拒绝。这是保护机制不是故障，解除会清空全片。",
+      "next_steps": [
+        "STM32CubeProgrammer → OB（选项字节）→ RDP 改 AA（0 级）→ Apply（全片擦除）",
+        "OpenOCD：stm32f1x unlock 0 命令（F1 系列）",
+        "解除后重新烧录即可；自己的代码别随手开 RDP level 2（不可逆）"
+      ],
+      "source": "STM32 选项字节手册（RM0008/RM0090 RDP 节）"
+    },
+    {
+      "id": "SWD_COMM_FAIL",
+      "name": "SWD 通信失败（运行中丢失）",
+      "severity": "high",
+      "patterns": [
+        "(?i)SWD/JTAG\\s+Communication\\s+Failure",
+        "(?i)DAP\\s+error",
+        "(?i)SWD\\s+abort",
+        "(?i)target\\s+is\\s+not\\s+responding"
+      ],
+      "diagnosis": "调试中目标突然失联：低功耗模式关了 SWD 时钟、固件重配了调试引脚、或看门狗复位打断。",
+      "next_steps": [
+        "固件进了 STOP/STANDBY：进低功耗前 DBGMCU 配置保留 SWD 时钟（DBGMCU->CR |= DBG_STOP）",
+        "固件把 PA13/PA14（SWDIO/SWCLK）重配成 GPIO：保留这两个脚或用 Connect under reset 抢救",
+        "看门狗周期复位导致掉线：调试时临时关 IWDG（DBGMCU 冻结 IWDG）",
+        "代码里 SWD 引脚重配是高频事故——写入前先检查引脚配置代码"
+      ],
+      "source": "STM32 DBGMCU 手册 + ST 社区常见案例"
+    },
+    {
+      "id": "CAN_BUS_OFF",
+      "name": "CAN 总线离线（Bus-Off）",
+      "severity": "high",
+      "patterns": [
+        "(?i)bus[- ]?off",
+        "(?i)error\\s+passive",
+        "(?i)CAN\\s+(?:TX|transmit)\\s+failed",
+        "(?i)arbitration\\s+lost",
+        "(?i)CAN\\s*(?:ESR|error).*?LEC"
+      ],
+      "diagnosis": "CAN 节点错误计数器打满进入 Bus-Off：绝大多数是波特率或终端电阻问题，不是软件 bug。",
+      "next_steps": [
+        "波特率必须全网一致且采样点一致：500k 是常见值，位时序(分频/段1/段2)要对着算",
+        "总线两端各一个 120Ω 终端电阻：只有一端有或都拆了都会报错（万用表量 H-L 间约 60Ω）",
+        "CANH/CANL 接反：现象正是持续错误帧进 Bus-Off",
+        "单节点自测：其他节点没上电时发送端永远收不到 ACK，错误计数打满是正常现象",
+        "恢复：软件重初始化或硬件自动恢复（ABOM 位），别死等"
+      ],
+      "source": "ISO 11898 + STM32 bxCAN 参考手册（RM0008 CAN 节）"
+    },
+    {
+      "id": "WIFI_RECONNECT_STORM",
+      "name": "WiFi 反复断连重连（风暴）",
+      "severity": "medium",
+      "min_count": 3,
+      "patterns": [
+        "WIFI\\s+DISCONNECT"
+      ],
+      "diagnosis": "WIFI DISCONNECT 出现 3 次以上：不是偶发断线，是系统性问题——供电、路由器踢设备、或固件没处理重连。",
+      "next_steps": [
+        "供电不足是头号原因：ESP32 WiFi 发射瞬间电流 500mA+，USB 口/细线带不动就周期性掉线（同时观察有无 brownout）",
+        "路由器把设备踢了：2.4G 信道拥堵/省电模式踢空闲设备，换信道或关路由器省电",
+        "固件必须自动重连：监听 WIFI DISCONNECT 事件后重连，别指望连一次管到底",
+        "事件风暴别在事件回调里做重活：回调里发阻塞请求会饿死 WiFi 任务"
+      ],
+      "source": "Espressif WiFi 事件处理指南 + 社区高频案例"
+    },
+    {
+      "id": "BLE_CONN_LOST",
+      "name": "蓝牙连接丢失/配对失败",
+      "severity": "medium",
+      "patterns": [
+        "(?i)BLE\\s+disconnect",
+        "(?i)GATT\\s+error",
+        "(?i)HCI\\s+error",
+        "(?i)(?:BLE|GATT|Bluetooth|蓝牙|NimBLE|HCI)[^\\r\\n]{0,40}connection\\s+(?:timeout|lost|drop)",
+        "(?i)connection\\s+(?:timeout|lost|drop)[^\\r\\n]{0,40}(?:BLE|GATT|Bluetooth|蓝牙|NimBLE)",
+        "(?i)NimBLE.*?(?:error|fail)"
+      ],
+      "diagnosis": "BLE 连接建立后异常断开或配对失败：连接参数、MTU、或安全配对流程问题。",
+      "next_steps": [
+        "连接间隔参数要双方可接受：请求 7.5ms 这类极限间隔，很多手机中心设备直接拒绝",
+        "MTU 协商：发超过默认 23 字节的数据前先交换 MTU，不然静默丢包",
+        "配对失败查 IO 能力配置：DisplayOnly 设备配 KeyboardOnly 策略会走不通",
+        "ESP 系看连接回调里的断开原因码：0x08 连接超时=距离/干扰，0x13 远端主动断开=对端代码问题",
+        "广播数据超 31 字节要挂 scan response，硬塞会被截断"
+      ],
+      "source": "Bluetooth Core Spec 连接参数规范 + Espressif NimBLE 文档"
+    },
+    {
+      "id": "JLINK_FAIL",
+      "name": "J-Link 连接/许可失败",
+      "severity": "high",
+      "patterns": [
+        "(?i)Cannot\\s+connect\\s+to\\s+J-Link",
+        "(?i)J-Link.*?DLL\\s+error",
+        "(?i)The\\s+connected\\s+(?:emulator|probe).*?does\\s+not\\s+support",
+        "(?i)J-Link.*?license",
+        "(?i)SEGGER\\s+J-Link.*?(?:fail|error)"
+      ],
+      "diagnosis": "J-Link 层面失败：驱动/DLL 冲突、芯片许可（非 ST 器件用克隆 J-Link）、或 SWD 物理层问题。",
+      "next_steps": [
+        "J-Link Commander（JLink.exe）先直连测试：能连就是 IDE 配置问题，不能连是物理/驱动问题",
+        "克隆 J-Link 连非 ST 芯片会报许可错误：换官方或 DAPLink（pyocd/openocd 免许可）",
+        "DLL 冲突：装过多个版本的 SEGGER 包，卸干净重装最新版",
+        "速度降下来再试：USB 或 SWD 速率过高在长线上必失败",
+        "更新 J-Link 固件：旧固件对新芯片型号不识别"
+      ],
+      "source": "SEGGER J-Link 文档 + 官方 Wiki 故障章节"
+    },
+    {
+      "id": "DNS_FAIL",
+      "name": "DNS 解析失败",
+      "severity": "medium",
+      "patterns": [
+        "(?i)DNS\\s+(?:fail|error|resolution)",
+        "(?i)gethostbyname\\s+failed",
+        "(?i)cannot\\s+resolve",
+        "(?i)ESP_ERR_ESP_NETIF_RESOLVE"
+      ],
+      "diagnosis": "域名解析不出 IP：网络通了但 DNS 没通，或域名/网络栈配置问题。",
+      "next_steps": [
+        "先用 ping IP 验证网络本身通不通：通则纯 DNS 问题",
+        "DNS 服务器没配：DHCP 拿不到 DNS 时手动指定（如 223.5.5.5 / 114.114.114.114）",
+        "域名写错：.com/.cn 拼写、协议前缀别混进 host 参数",
+        "内网自建服务：手机热点下路由器分配的 DNS 解析不了内网域名——改 hosts 或直接用 IP",
+        "UDP 53 被防火墙拦：企业网络常见，换 DoH 或走代理"
+      ],
+      "source": "lwip/ESP-Netif 错误码 + 常见网络排查路径"
+    },
+    {
+      "id": "USB_ENUM_FAIL",
+      "name": "USB 枚举失败",
+      "severity": "high",
+      "patterns": [
+        "(?i)device\\s+descriptor\\s+(?:request\\s+)?failed",
+        "(?i)cannot\\s+enumerate",
+        "(?i)USB[^\\r\\n]{0,30}unknown\\s+device",
+        "(?i)unknown\\s+device[^\\r\\n]{0,30}USB",
+        "(?i)USB\\s+(?:device\\s+)?not\\s+(?:recognized|acknowledged)",
+        "(?i)enumeration\\s+failed"
+      ],
+      "diagnosis": "PC 识别到有东西插入但枚举失败：硬件层（DP 上拉/晶振/供电）问题占绝对多数，固件描述符问题是少数。",
+      "next_steps": [
+        "DP 1.5kΩ 上拉电阻：D+ 上拉到 3.3V 是全速设备身份证，蓝药丸的 R10 焊没焊直接决定枚举成败",
+        "晶振频率：USB 对时钟精度苛刻，HSE 必须是标准值且 PLL 倍频后 USBCLK=48MHz±0.25%",
+        "供电：VBUS 5V 进来后 3.3V 稳压器带不动就掉——换粗 USB 线/短一点",
+        "换 USB 口类型：别插 USB3.0 蓝口先试 2.0 黑口，部分老芯片组兼容性差",
+        "固件侧：描述符长度字段写错、端点缓冲超限、地址没在 RESET 后复位为 0"
+      ],
+      "source": "USB 2.0 规范枚举流程 + STM32 USB 设备库 FAQ"
+    },
+    {
+      "id": "UART_ORE_RX_LATCH",
+      "name": "UART 溢出(ORE)把接收端拖死",
+      "severity": "high",
+      "patterns": [
+        "(?i)\\bORE\\b",
+        "(?i)(?:rx|receive|uart|usart)\\s+overrun",
+        "(?i)overrun\\s+(?:error|detected|occurred)",
+        "(?i)HAL_UART_Receive[^\\r\\n]{0,40}(?:fail|error|HAL_BUSY)"
+      ],
+      "diagnosis": "接收端从此不再回应任何数据：上一个字节还没被读走、下一个字节就到了，硬件把 UART 溢出标志(ORE)置起。STM32 HAL 的轮询接收 HAL_UART_Receive 遇到 ORE 会提前 return，却**没有**把 huart->RxState 复位成 READY，于是下一次调用直接返回 HAL_BUSY —— 接收永久僵死，只有复位（或重新 HAL_UART_Init）才恢复。典型触发方式：给「逐字节协议」的设备多发了一个字节（例如工具自动补上的 CRLF）。",
+      "next_steps": [
+        "先分清「设备死了」还是「只是收不到预期应答」：复位后只发 1 个有效字节，能响应就说明接收端是被溢出拖死的（不是接线/波特率问题）",
+        "发送内容缩到设备真正需要的字节数：逐字节协议（HAL_UART_Receive 轮询一次收 1 字节当命令）不要补 \\r\\n，本工具 serial_send 用 newline=False、at_sequence 用 newline=False",
+        "改用接收中断 / IDLE 中断 / DMA 收数据，别用阻塞轮询逐字节收；中断里读到 ORE 要清 UART_CLEAR_OREF",
+        "必须轮询时：HAL_UART_Receive 返回非 HAL_OK 就 __HAL_UART_CLEAR_FLAG(&huart, UART_CLEAR_OREF)，并把 huart.RxState 手动复位为 HAL_UART_STATE_READY 再重试",
+        "把 UART_ErrorCallback 实现出来（留空等于把错误吞掉），或开 FIFO 与接收超时"
+      ],
+      "source": "真机实测 2026-09-22（workbuddy）：NUCLEO-H563ZI / STM32H563 / MB1404，固件 SENSOR_PWR_CTRL 经板载 ST-LINK VCP(USART3@PD8/PD9, COM21, 115200 8N1) 用 HAL_UART_Receive 轮询逐字节收 '0'/'1'。实测：只发 '1' 单字节连续 6 次全部正常；发 '1\\r\\n' 时第 1 次仍返回 'PWR ON'，此后永久无响应（单字节亦不理），SWD 复位后立刻恢复。"
+    }
+  ]
+}

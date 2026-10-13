@@ -1,0 +1,69 @@
+Archive member included to satisfy reference by file (symbol)
+
+                             C:/toolchain/lib/gcc/arm-none-eabi/12.2.1/libgcc.a(_udivsi3.o)
+                              main.o (__aeabi_uidiv)
+
+Discarded input sections
+
+ .text          0x0000000000000000        0x0 main.o
+ .text          0x0000000000000000        0x0 mpu6050.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x08000000         0x00100000         xr
+RAM              0x20000000         0x00020000         xrw
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD main.o
+LOAD mpu6050.o
+LOAD C:/toolchain/lib/gcc/arm-none-eabi/12.2.1/libgcc.a
+
+.text           0x08000000     0x1200
+ *(.isr_vector)
+ .isr_vector    0x08000000      0x130 main.o
+                0x08000000                g_pfnVectors
+ *(.text*)
+ .text          0x08000130       0x40 main.o
+                0x08000130                main
+ .text          0x08000170       0x8c mpu6050.o
+                0x08000170                mpu6050_read
+ .text          0x080001fc       0x74 mpu6050.o
+                0x080001fc                mpu6050_write
+ .text          0x08000270       0x64 shtp.o
+                0x08000270                shtp_parse
+ .text          0x080002d4       0x98 imu.o
+                0x080002d4                imu_task
+ .text          0x0800036c       0x30 util.o
+                0x0800036c                helper_add
+ .text          0x0800039c       0xa0 lib.o
+                0x0800039c                __aeabi_uidiv
+ *(.rodata*)
+ .rodata        0x0800043c       0x24 main.o
+ .rodata        0x08000460       0x10 mpu6050.o
+
+.data           0x20000000      0x1c8
+ .data          0x20000000       0x64 main.o
+                0x20000000                g_cfg
+ .data          0x20000064       0x18 mpu6050.o
+                0x20000064                g_mpu_state
+ .data          0x2000007c      0x164 imu.o
+
+.bss            0x200001c8      0x5c0
+ .bss           0x200001c8      0x4b0 imu.o
+                0x200001c8                raw_buf
+ .bss           0x20000678       0x40 mpu6050.o
+                0x20000678                scratch
+ .bss           0x200006b8       0x20 shtp.o
+ .bss           0x200006d8       0x64 main.o
+                0x200006d8                app_state
+
+__bss_start__  0x200001c8                PROVIDE (__bss_start__, .)
+__bss_end__    0x20000788                PROVIDE (__bss_end__, .)
+_Min_Heap_Size 0x00000200                PROVIDE (_Min_Heap_Size, 0x200)
+_Min_Stack_Size
+               0x00000400                PROVIDE (_Min_Stack_Size, 0x400)
+
+OUTPUT(firmware.elf elf32-littlearm)

@@ -1,0 +1,22 @@
+{
+  "board": "BlackPill V2（STM32F411CEU6 黑药丸）",
+  "alias": ["blackpill", "黑药丸", "blackpill_f411"],
+  "mcu": "stm32f411ceu6",
+  "source": "WeAct BlackPill V2/V3 原理图 + ST 社区板级分析",
+  "onboard": {
+    "LED": { "source": "WeAct BlackPill V2/V3 原理图", "pin": "PA5", "active": "high", "note": "高电平点亮（部分版本在 PC13，低电平点亮——以手上板子实测为准）。注意 PA5 同时是 SPI1_SCK/DAC_OUT2，用 SPI/DAC 就别要点灯" },
+    "USB": { "source": "WeAct BlackPill V2/V3 原理图", "pins": ["PA11", "PA12"], "note": "USB-C 口（仅 2.0 速度）；F411 有内置上拉可软件控制，但仍需检查 R10 类 DP 上拉是否焊" },
+    "SWD": { "source": "WeAct BlackPill V2/V3 原理图", "pins": ["PA13", "PA14"], "note": "SWD 排针" },
+    "BUTTON_BOOT0": { "source": "WeAct BlackPill V2/V3 原理图", "pin": "BOOT0", "note": "DFU 下载模式 = 按住 BOOT0 点 RESET 松开（F411 ROM 自带 DFU，免调试器就能烧）" },
+    "BUTTON_RESET": { "source": "WeAct BlackPill V2/V3 原理图", "pin": "NRST", "note": "RESET 按键" }
+  },
+  "board_issues": [
+    "HSE 是 25MHz（不是 F1 的 8MHz）：网上抄的时钟配置不变频的话 SYSCLK 会算错，USB/UART 波特率全歪——用 CubeMX 时钟树重算",
+    "PA5 板载 LED 与 SPI1_SCK/DAC 冲突：点灯和 SPI1 二选一（或挪到 PC13，注意极性可能相反）",
+    "USB-C 口只有 2.0：插 USB3 线/口不影响，但别期待 5Gbps；CC 脚焊了 5.1k 下拉（V2 修正版），早期版本用标准 A-to-C 线才能供电",
+    "DFU 是最省事烧录法：BOOT0 按键进 ROM DFU，Windows 装 WinUSB 驱动后 STM32CubeProgrammer/dfu-util 直接烧，不用 ST-Link",
+    "3.3V 供电能力同蓝药丸一样弱：电机/舵机别蹭",
+    "F411 浮点单元（FPU）：Keil/CubeMX 里没开 FPU 的话 float 运算走软件模拟，慢 10 倍——编译选项要选 Single Precision"
+  ],
+  "power_notes": "5V/3.3V 引脚与蓝药丸同策略：3.3V 只给小电流外设。USB-C 供电约 500mA 上限（取决于上游口）"
+}

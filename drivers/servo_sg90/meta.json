@@ -1,0 +1,8 @@
+{
+  "name": "servo_sg90",
+  "desc": "SG90/MG90S 舵机驱动（角度→脉宽→定时器 CCR 纯函数换算，50Hz PWM）",
+  "version": "1.0.0",
+  "verified": "换算逻辑 5 项断言 Python 交叉验证通过（2026-09-20）；C 编译验证待 gcc 可用环境（tests/Makefile 已备）",
+  "usage": "复制 servo_sg90.h/servo_sg90.c/servo_sg90_port.h 进工程，port 里改定时器时钟/PSC/ARR 三处即可",
+  "common_pitfalls": "MCU 5V 引脚直接供电→堵转瞬间掉电复位（必须独立 5V+共地）；PSC/ARR 配错周期不是 20ms→舵机嗡嗡抖不动；0°/180° 个别个体到不了→实际用 10-170° 安全"
+}

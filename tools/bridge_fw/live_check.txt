@@ -1,0 +1,199 @@
+================================================================
+【1】编译
+== gcc rc=0 ==
+
+
+== objcopy rc=0 ==
+
+
+== size ==
+   text	   data	    bss	    dec	    hex	filename
+   5864	      0	   1848	   7712	   1e20	D:\work\ls\mcu-debug-mcp\tools\bridge_fw\fw.elf
+
+== bin size = 5864 bytes ==
+（扇区 0 = 8KB：只要 bin 不超过 8192 字节，烧进 0x08000000 就不会
+  越界到别的内容；用 live_check.py 烧录，它会先核对这条。）
+
+fw.bin = 5864 字节
+
+【2】烧录桥固件到 0x08000000
+$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\ls\mcu-debug-mcp\tools\bridge_fw\fw.bin 0x08000000 -v -rst
+        -------------------------------------------------------------------
+                         STM32CubeProgrammer v2.21.0
+        -------------------------------------------------------------------
+  ST-LINK SN  : 0046001C3234511737333934
+  ST-LINK FW  : V3J10M3
+  Board       : NUCLEO-H563ZI
+  Voltage     : 3.27V
+  SWD freq    : 8000 KHz
+  Connect mode: Normal
+  Reset mode  : Software reset
+  Device ID   : 0x484
+  Revision ID : Rev X
+  Device name : STM32H56x/573
+  Flash size  : 2 MBytes
+  Device type : MCU
+  Device CPU  : Cortex-M33
+  BL Version  : 0xE4
+  SFSP Version: v2.5.0
+  Debug in Low Power mode enabled
+  Opening and parsing file: fw.bin
+  Memory Programming ...
+    File          : fw.bin
+    Size          : 5.73 KB
+    Address       : 0x08000000
+  Erasing memory corresponding to segment 0:
+  Erasing internal memory sector 0
+  Download in Progress:
+  File download complete
+  Time elapsed during download operation: 00:00:00.077
+  Verifying...
+  Read progress:
+  Time elapsed during verifying operation: 00:00:00.023
+  Download verified successfully
+  MCU Reset
+  Software reset is performed
+  (rc=0)
+
+================================================================
+【3】用 mcu-debug-mcp 的总线工具打真桥（port=COM21）
+----------------------------------------------------------------
+【3.1 bridge_probe】
+桥自检（bus=-　桥：NUCLEO-H563ZI）
+  端口       : COM21
+  协议       : MCUDBG/1 ✓ 与工具一致
+  桥支持     : i2c,spi,1w
+  ⓘ 未声明支持：RS485 —— 用到这些的工具会收到 -ERR，不是接线问题。
+
+  桥活着、认协议。下一步再怀疑接线和器件。
+----------------------------------------------------------------
+【3.2 i2c_scan】
+I2C 扫描（bus=0　桥：NUCLEO-H563ZI）
+  扫描范围   : 0x08–0x77（共 112 个地址）
+  应答器件   : 0 个
+
+  一个都没有。按这个次序查（从最常见开始）：
+    1) 器件上电了吗（量 VCC；很多模块要 3.3V 而不是 5V）
+    2) SDA/SCL 有没有接反、有没有接上（这是最常见的）
+    3) 上拉电阻在不在（4.7k 到 VCC；缺了会一个都扫不到）
+    4) 是不是走了 I2C 多路复用器（如 TCA9548A）：
+       多路复用器后面的器件**默认是断开的**，必须先给它写通道选择字，
+       所以直接扫主总线只能看到复用器自己（0x70–0x77），看不到后面那 8 路。
+    5) 共地了吗
+----------------------------------------------------------------
+【3.3 spi_scan】
+SPI 扫描（逐 CS 读 JEDEC ID 0x9F）（bus=0　桥：NUCLEO-H563ZI）
+  ⓘ SPI **没有地址概念**，所以「扫描」只能是逐条 CS 发 0x9F：只有遵守
+    0x9F 的 SPI NOR/NAND flash 会被列出来。SPI 传感器 / ADC / 显示驱动
+    各有自己的命令字 —— 扫不到它们属于正常，不是故障（用 spi_read_reg 指命令）。
+
+  CS0      0xFFFFFF  —— 无器件（全 1：MISO 被上拉/悬空，没人在驱动它）
+  CS1      0xFFFFFF  —— 无器件（全 1：MISO 被上拉/悬空，没人在驱动它）
+
+  结论：没有任何一条 CS 上读出有效 JEDEC ID。
+  这**不代表 SPI 坏了** —— 三种常见情形：
+    1) 板上挂的是 SPI 传感器/ADC（例如 ICM-426xx、ADS 系列），
+       它们不认 0x9F，要用自己的命令字（spi_read_reg 指命令）；
+    2) CS 脚号配错了（桥固件里的槽位表要对着你的接线改）；
+    3) MISO 悬空（读回全 1）或没接。
+----------------------------------------------------------------
+【3.4 spi_read_reg(0x9F,3)】
+SPI 读（bus=0　桥：NUCLEO-H563ZI）
+  CS         : 0     命令字: 0x9F
+  读到       : 0xff,0xff,0xff
+  十进制     : 255 255 255
+
+  ⓘ 全 0 / 全 1 通常意味着「这条件命令在从设备上不成立」或「MISO 没人驱动」，
+    而不是「寄存器的值就是 0 / 0xFF」。先核对命令字，再查 MISO 接线。
+----------------------------------------------------------------
+【3.5 onewire_scan】
+1-Wire 搜索 ROM（bus=0　桥：NUCLEO-H563ZI）
+  没有找到任何 1-Wire 器件。
+  ⓘ 常见原因：1) 数据线缺 4.7k 上拉（1-Wire 靠上拉给寄生电容充电，
+    缺了必然搜不到）；2) 器件在寄生供电模式但总线没有强上拉；
+    3) 线太长/容性太大（降速或加短接）；4) 桥固件里 1-Wire 用的引脚不对。
+----------------------------------------------------------------
+【3.6 rs485_send】
+桥拒绝了这条命令：-ERR NOBUS rs485 transceiver not fitted on this bridge
+  ⓘ 桥固件里没有配置这条总线（bus 编号对不上，或固件没打开该控制器）。
+  （命令：RS485 SEND 0 2.0 48656c6c6f）
+
+================================================================
+【4】恢复原始固件（D:\work\_tmp\h563_probe_fw\orig_sector0.bin）
+$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\_tmp\h563_probe_fw\orig_sector0.bin 0x08000000 -v -rst
+        -------------------------------------------------------------------
+                         STM32CubeProgrammer v2.21.0
+        -------------------------------------------------------------------
+  ST-LINK SN  : 0046001C3234511737333934
+  ST-LINK FW  : V3J10M3
+  Board       : NUCLEO-H563ZI
+  Voltage     : 3.28V
+  SWD freq    : 8000 KHz
+  Connect mode: Normal
+  Reset mode  : Software reset
+  Device ID   : 0x484
+  Revision ID : Rev X
+  Device name : STM32H56x/573
+  Flash size  : 2 MBytes
+  Device type : MCU
+  Device CPU  : Cortex-M33
+  BL Version  : 0xE4
+  SFSP Version: v2.5.0
+  Debug in Low Power mode enabled
+  Opening and parsing file: orig_sector0.bin
+  Memory Programming ...
+    File          : orig_sector0.bin
+    Size          : 8.00 KB
+    Address       : 0x08000000
+  Erasing memory corresponding to segment 0:
+  Erasing internal memory sector 0
+  Download in Progress:
+  File download complete
+  Time elapsed during download operation: 00:00:00.083
+  Verifying...
+  Read progress:
+  Time elapsed during verifying operation: 00:00:00.027
+  Download verified successfully
+  MCU Reset
+  Software reset is performed
+  (rc=0)
+$ STM32_Programmer_CLI -c port=SWD mode=normal -u 0x08000000 8192 D:\work\ls\mcu-debug-mcp\tools\bridge_fw\restore_readback.bin
+        -------------------------------------------------------------------
+                         STM32CubeProgrammer v2.21.0
+        -------------------------------------------------------------------
+  ST-LINK SN  : 0046001C3234511737333934
+  ST-LINK FW  : V3J10M3
+  Board       : NUCLEO-H563ZI
+  Voltage     : 3.27V
+  SWD freq    : 8000 KHz
+  Connect mode: Normal
+  Reset mode  : Software reset
+  Device ID   : 0x484
+  Revision ID : Rev X
+  Device name : STM32H56x/573
+  Flash size  : 2 MBytes
+  Device type : MCU
+  Device CPU  : Cortex-M33
+  BL Version  : 0xE4
+  SFSP Version: v2.5.0
+  Debug in Low Power mode enabled
+  UPLOADING ...
+    File          : D:\work\ls\mcu-debug-mcp\tools\bridge_fw\restore_readback.bin
+    Size          : 8192 Bytes
+    Address:      : 0x8000000
+  Read progress:
+  Data read successfully
+  Warning: The file restore_readback.bin already exists, it will be overwritten
+  Time elapsed during read operation is: 00:00:00.028
+  (rc=0)
+恢复回读 md5 df49003ae961e49acc192f73c590a91d（期望 df49003ae961e49acc192f73c590a91d）→ 一致 ✓
+
+================================================================
+验证汇总：
+  [PASS] bridge_probe 协议握手
+  [PASS] i2c_scan 空总线=有效结论
+  [PASS] spi_scan 两条 CS 都无器件
+  [PASS] spi_read 读回全 1（MISO 悬空）
+  [PASS] onewire_scan 无器件
+  [PASS] rs485_send 桥如实回 -ERR NOBUS
+结论：桥链路真机全通 ✓

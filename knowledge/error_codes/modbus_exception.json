@@ -1,0 +1,13 @@
+{
+  "id": "modbus_exception",
+  "desc": "Modbus 异常响应码（功能码 0x80+ 为异常响应）",
+  "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）",
+  "entries": {
+    "1": { "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）", "meaning": "非法功能（Illegal Function）", "hint": "从机不支持该功能码——查从机型号支持的指令集" },
+    "2": { "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）", "meaning": "非法数据地址（Illegal Data Address）", "hint": "寄存器地址超范围——对照从机寄存器表，注意 40001 与 0x0000 的偏移约定" },
+    "3": { "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）", "meaning": "非法数据值（Illegal Data Value）", "hint": "写入值超范围/寄存器数量为 0——查寄存器表的有效值域" },
+    "4": { "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）", "meaning": "从站设备故障（Slave Device Failure）", "hint": "从机内部执行出错——看从机状态/重试/复位" },
+    "5": { "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）", "meaning": "确认（Acknowledge）：请求已受理，处理中", "hint": "长耗时操作（如写 EEPROM），稍后轮询" },
+    "6": { "source": "Modbus Application Protocol Specification V1.1b3（第 7 章 Server exception codes）", "meaning": "从站设备忙（Slave Device Busy）", "hint": "从机在处理前一请求——加间隔重发" }
+  }
+}

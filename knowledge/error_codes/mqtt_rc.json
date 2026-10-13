@@ -1,0 +1,12 @@
+{
+  "id": "mqtt_rc",
+  "desc": "MQTT PubSubClient connect() 返回码",
+  "source": "PubSubClient 库文档（connect 返回值）",
+  "entries": {
+    "-1": { "source": "PubSubClient 库文档（connect 返回值）", "meaning": "连接失败：服务器地址/端口错或网络未就绪", "hint": "先确认 WiFi 已连上且 IP 有效" },
+    "-2": { "source": "PubSubClient 库文档（connect 返回值）", "meaning": "连接失败：TCP 层没通", "hint": "确认 broker IP 可 ping 通、端口正确" },
+    "-3": { "source": "PubSubClient 库文档（connect 返回值）", "meaning": "连接失败：TCP 通了但 CONNECT 被拒", "hint": "clientId 重复/认证信息错" },
+    "-4": { "source": "PubSubClient 库文档（connect 返回值）", "meaning": "连接超时：服务器无响应", "hint": "查端口与防火墙" },
+    "-5": { "source": "PubSubClient 库文档（connect 返回值）", "meaning": "已断开：连接后被踢", "hint": "多为 clientId 冲突（两台设备同 ID 互踢）" }
+  }
+}

@@ -1,0 +1,740 @@
+{
+  "schema": 1,
+  "updatedAt": "2026-09-22",
+  "note": "能力面清单（机器可读）——本文件是「应该覆盖什么」的唯一权威声明。tests/audit_capability.py 拿它与实现、文档三方对账，缺口与状态全部实测得出，不手工维护数字。改能力面就改这里，不要改文档里的数字。",
+  "howto": {
+    "probe.kind": {
+      "core_len": "调用 core.<call>() 取其长度（如 pinmap_list）",
+      "core_has": "names 里有几个真存在于 core（用于判断某个工具/函数是否已实现）",
+      "layer_dirs": "层叠列举数据目录下的子目录个数（内置层 + 外置补充层）",
+      "layer_files": "层叠列举数据目录下的文件个数",
+      "errcode_entries": "全部错误码表的条目总数",
+      "rules": "analyzer 内置规则 + 外置规则条数",
+      "attr_len": "模块级容器属性的长度（如 core._FLASH_TOOLS）",
+      "decorators": "server.py 里某类装饰器的个数（tool/resource/prompt）",
+      "file_exists": "paths 里有几个真实存在（用于工程交付物）",
+      "axes_met": "ids 里已达标的能力轴个数（用于「多轴合并」型缺口）",
+      "tools_with_assertions": "有专项断言的工具个数（复用深度矩阵，反着看就是 N-14）",
+      "manual": "无法自动数，须在 reason 里说明原因并给 now——这是最后手段，能自动就别用"
+    },
+    "gap.done": "now >= target 即视为该缺口已完成"
+  },
+  "axes": [
+    {
+      "id": "mcu_pinmap",
+      "name": "MCU 引脚库（款）",
+      "probe": {
+        "kind": "core_len",
+        "call": "pinmap_list"
+      },
+      "target": 10,
+      "plan": "N-08",
+      "note": "目标跨 5 家族：STM32 F1/F4/G0/H5 · ESP32/C3/S3 · RP2040 · nRF52 · 国产(GD32/CH32)"
+    },
+    {
+      "id": "boards",
+      "name": "开发板知识库（款）",
+      "probe": {
+        "kind": "core_len",
+        "call": "board_list"
+      },
+      "target": 10,
+      "plan": "N-08",
+      "note": "含各家 Nucleo/Discovery、ESP32-S3-DevKitC、RP2040/Pico、nRF52-DK"
+    },
+    {
+      "id": "drivers",
+      "name": "预验证驱动库（款）",
+      "probe": {
+        "kind": "layer_dirs",
+        "subdir": [
+          "drivers"
+        ]
+      },
+      "target": 20,
+      "plan": "N-08",
+      "note": "补 I2C 系(BMP280/MPU9250/SH1106/AHT20/PCF8574) · SPI 系(W25Q/RC522/ILI9341) · 单总线多点"
+    },
+    {
+      "id": "errcode_tables",
+      "name": "错误码表（族）",
+      "probe": {
+        "kind": "layer_files",
+        "subdir": [
+          "knowledge",
+          "error_codes"
+        ]
+      },
+      "target": 12,
+      "plan": "N-08",
+      "note": "补 HAL 状态码 / FreeRTOS / Zephyr errno / lwIP / mbedTLS / SD 卡 / USB"
+    },
+    {
+      "id": "errcode_entries",
+      "name": "错误码（条）",
+      "probe": {
+        "kind": "errcode_entries"
+      },
+      "target": 150,
+      "plan": "N-08",
+      "note": "铁律：逐条对数据手册，不许凭记忆灌"
+    },
+    {
+      "id": "fault_bits",
+      "name": "故障位域表（张）",
+      "probe": {
+        "kind": "layer_files",
+        "subdir": [
+          "knowledge",
+          "fault_bits"
+        ]
+      },
+      "target": 4,
+      "plan": "N-08",
+      "note": "现仅 cortex_m；补 RISC-V mcause / Xtensa exception / Cortex-M 安全扩展"
+    },
+    {
+      "id": "fault_rules",
+      "name": "故障模式规则（条）",
+      "probe": {
+        "kind": "rules"
+      },
+      "target": 60,
+      "plan": "N-08",
+      "note": "补 RTOS 死锁/优先级反转、堆耗尽、DMA 错、Flash 写失败、时钟未起振、SPI 模式错、I2C 时钟拉伸超时"
+    },
+    {
+      "id": "proto_uart",
+      "name": "协议·UART 全套",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "serial_open",
+          "serial_read",
+          "serial_send",
+          "at_sequence"
+        ]
+      },
+      "target": 4,
+      "plan": "—"
+    },
+    {
+      "id": "proto_modbus",
+      "name": "协议·Modbus RTU",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "modbus_parse",
+          "modbus_crc"
+        ]
+      },
+      "target": 2,
+      "plan": "—"
+    },
+    {
+      "id": "proto_i2c",
+      "name": "协议·I2C 扫描/读写",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "i2c_scan",
+          "i2c_read_reg",
+          "i2c_write_reg"
+        ]
+      },
+      "target": 3,
+      "plan": "G06"
+    },
+    {
+      "id": "proto_spi",
+      "name": "协议·SPI 扫描/读寄存器",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "spi_scan",
+          "spi_read_reg"
+        ]
+      },
+      "target": 2,
+      "plan": "G06"
+    },
+    {
+      "id": "proto_can",
+      "name": "协议·CAN 帧解析",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "can_parse"
+        ]
+      },
+      "target": 1,
+      "plan": "G08"
+    },
+    {
+      "id": "proto_onewire",
+      "name": "协议·1-Wire 扫描",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "onewire_scan"
+        ]
+      },
+      "target": 1,
+      "plan": "G06"
+    },
+    {
+      "id": "proto_nmea",
+      "name": "协议·NMEA(GPS) 解析",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "nmea_parse"
+        ]
+      },
+      "target": 1,
+      "plan": "G08"
+    },
+    {
+      "id": "proto_frame",
+      "name": "协议·通用自定义二进制帧",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "frame_parse"
+        ]
+      },
+      "target": 1,
+      "plan": "G08"
+    },
+    {
+      "id": "proto_rs485",
+      "name": "协议·RS485 方向控制",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "rs485_send"
+        ]
+      },
+      "target": 1,
+      "plan": "G06"
+    },
+    {
+      "id": "eco_frameworks",
+      "name": "生态/框架识别（种）",
+      "probe": {
+        "kind": "manual",
+        "now": 1,
+        "reason": "现有 STM32 HAL / ESP-IDF / Arduino 的识别散落在 analyzer 内置规则里，没有统一枚举点可数；待 G02/N-09 建 knowledge/ecosystem.json 后改自动"
+      },
+      "target": 6,
+      "plan": "N-09",
+      "note": "补 Zephyr / RT-Thread / PlatformIO / Keil / IAR / Rust defmt"
+    },
+    {
+      "id": "toolchain_info",
+      "name": "工具链/工程结构探测",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "toolchain_status",
+          "project_detect"
+        ]
+      },
+      "target": 2,
+      "plan": "G02"
+    },
+    {
+      "id": "probes_flashers",
+      "name": "探针/烧录器探测名单（条）",
+      "probe": {
+        "kind": "attr_len",
+        "module": "core",
+        "attr": "_FLASH_TOOLS"
+      },
+      "target": 10,
+      "plan": "N-10",
+      "note": "同一工具的别名也计入条目数；目标覆盖 ST-Link CLI / J-Link(JLinkExe,nrfjprog) / BMP / dfu-util / avrdude / UniFlash"
+    },
+    {
+      "id": "mcp_tools",
+      "name": "MCP 工具（个）",
+      "probe": {
+        "kind": "decorators",
+        "what": "tool"
+      },
+      "target": 33,
+      "plan": "—"
+    },
+    {
+      "id": "mcp_resources",
+      "name": "MCP 资源（个）",
+      "probe": {
+        "kind": "decorators",
+        "what": "resource"
+      },
+      "target": 11,
+      "plan": "—"
+    },
+    {
+      "id": "mcp_prompts",
+      "name": "MCP prompts（个）",
+      "probe": {
+        "kind": "decorators",
+        "what": "prompt"
+      },
+      "target": 6,
+      "plan": "N-07",
+      "note": "MCP 三原语现只用了两个；prompts 不依赖任何客户端特有 Skill，是最便宜的一条广度"
+    },
+    {
+      "id": "eng_files",
+      "name": "交付文件（LICENSE/CHANGELOG/CI）",
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "LICENSE",
+          "CHANGELOG.md",
+          ".github/workflows/ci.yml"
+        ]
+      },
+      "target": 3,
+      "plan": "N-02/N-03"
+    },
+    {
+      "id": "selfcheck_tool",
+      "name": "env_status 自检工具",
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "env_status"
+        ]
+      },
+      "target": 1,
+      "plan": "N-04"
+    },
+    {
+      "id": "examples",
+      "name": "离线示例",
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "examples/README.md",
+          "examples/offline_demo.py"
+        ]
+      },
+      "target": 2,
+      "plan": "N-13"
+    },
+    {
+      "id": "kb_schema",
+      "name": "知识库 schema / 贡献指南",
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "docs/KNOWLEDGE_SCHEMA.md"
+        ]
+      },
+      "target": 1,
+      "plan": "N-13"
+    },
+    {
+      "id": "guard_ops",
+      "name": "隔离防护（闸门化的硬件操作）",
+      "target": 6,
+      "plan": "N-11",
+      "probe": {
+        "kind": "guard_ops"
+      }
+    }
+  ],
+  "gaps": [
+    {
+      "id": "N-01",
+      "title": "打包与数据根（装出来是空壳）",
+      "batch": 0,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "setup.py",
+          "paths.py"
+        ]
+      },
+      "note": "另需打包冒烟测试绿（tests/test_package_smoke.py）"
+    },
+    {
+      "id": "N-02",
+      "title": "无 CI",
+      "batch": 0,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      "note": "跑 pytest + 知识库核验 + 常量审计 + 能力面审计 + 打包冒烟"
+    },
+    {
+      "id": "N-03",
+      "title": "无 LICENSE / CHANGELOG / 版本策略",
+      "batch": 0,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "LICENSE",
+          "CHANGELOG.md"
+        ]
+      }
+    },
+    {
+      "id": "N-04",
+      "title": "无自检工具 env_status",
+      "batch": 0,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "env_status"
+        ]
+      }
+    },
+    {
+      "id": "N-05",
+      "title": "无能力面清单与审计（根治「一次次补」）",
+      "batch": 0,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "coverage.json",
+          "tests/audit_capability.py"
+        ]
+      }
+    },
+    {
+      "id": "N-06",
+      "title": "芯片身份与存储信息（型号/revision/UID/Flash 容量/读保护）",
+      "batch": 1,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "chip_info"
+        ]
+      }
+    },
+    {
+      "id": "N-07",
+      "title": "MCP prompts（现 0 个）",
+      "batch": 5,
+      "probe": {
+        "kind": "decorators",
+        "what": "prompt"
+      },
+      "target": 6
+    },
+    {
+      "id": "N-08",
+      "title": "覆盖广度扩容",
+      "batch": 3,
+      "probe": {
+        "kind": "axes_met",
+        "ids": [
+          "mcu_pinmap",
+          "boards",
+          "drivers",
+          "errcode_tables",
+          "errcode_entries",
+          "fault_bits",
+          "fault_rules"
+        ]
+      }
+    },
+    {
+      "id": "N-09",
+      "title": "生态广度（Zephyr/RT-Thread/PlatformIO/Keil/IAR/Rust defmt）",
+      "batch": 4,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "knowledge/ecosystem.json"
+        ]
+      }
+    },
+    {
+      "id": "N-10",
+      "title": "探针与烧录器广度",
+      "batch": 4,
+      "probe": {
+        "kind": "attr_len",
+        "module": "core",
+        "attr": "_FLASH_TOOLS"
+      },
+      "target": 10
+    },
+    {
+      "id": "N-11",
+      "title": "破坏性操作统一防护（dry-run + 二次确认矩阵 + 运行时档位）",
+      "batch": 1,
+      "probe": {
+        "kind": "guard_ops"
+      },
+      "target": 6
+    },
+    {
+      "id": "N-12",
+      "title": "日志与会话治理（无限增长/大日志/敏感信息/保留策略）",
+      "batch": 2,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "logs_prune",
+          "_large_log_note"
+        ]
+      },
+      "note": "logs_prune：保留策略（keep_days/keep_count）+ 清理入口（默认 dry-run，真删过 guard 且需 confirm）+ 凭据提示；_large_log_note 管大日志"
+    },
+    {
+      "id": "N-13",
+      "title": "文档与示例（examples + 知识库 schema + 贡献指南）",
+      "batch": 5,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "examples/README.md",
+          "examples/offline_demo.py",
+          "docs/KNOWLEDGE_SCHEMA.md"
+        ]
+      }
+    },
+    {
+      "id": "N-14",
+      "title": "深度补齐：无专项断言的工具",
+      "batch": "持续",
+      "probe": {
+        "kind": "tools_with_assertions"
+      }
+    },
+    {
+      "id": "N-15",
+      "title": "真机验收夹具",
+      "batch": "持续",
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "tools/live_acceptance.py"
+        ]
+      }
+    },
+    {
+      "id": "G01",
+      "title": "器件选型库（传感器/模块：接口/地址/量程/坑）",
+      "batch": 3,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "knowledge/components/index.json"
+        ]
+      }
+    },
+    {
+      "id": "G02",
+      "title": "工具链探测（编译器/GDB/SDK 版本 + 工程结构）",
+      "batch": 4,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "toolchain_status",
+          "project_detect"
+        ]
+      }
+    },
+    {
+      "id": "G03",
+      "title": "外设 API 用法知识层（初始化顺序、常见配错）",
+      "batch": 3,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "knowledge/peripheral_usage/index.json"
+        ]
+      }
+    },
+    {
+      "id": "G05",
+      "title": "烧录后验证（回读比对 / CRC / 读保护）",
+      "batch": 1,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "flash_verify"
+        ]
+      }
+    },
+    {
+      "id": "G06",
+      "title": "总线工具（I2C/SPI 扫描 + 读写寄存器）",
+      "batch": 1,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "i2c_scan",
+          "spi_scan"
+        ]
+      }
+    },
+    {
+      "id": "G07",
+      "title": "时序 / 数据率分析（丢帧、节拍变慢）",
+      "batch": 2,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "timing_analysis"
+        ]
+      }
+    },
+    {
+      "id": "G08",
+      "title": "通用帧解析器（非 Modbus / NMEA / 自定义二进制）",
+      "batch": 3,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "frame_parse",
+          "nmea_parse"
+        ]
+      }
+    },
+    {
+      "id": "G10",
+      "title": "复位原因与运行状态读取",
+      "batch": 2,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "reset_reason"
+        ]
+      }
+    },
+    {
+      "id": "G11",
+      "title": "内存问题诊断方法论",
+      "batch": 5,
+      "probe": {
+        "kind": "file_exists",
+        "paths": [
+          "docs/MEMORY_DEBUG.md"
+        ]
+      },
+      "note": "docs/MEMORY_DEBUG.md：栈/堆/越界三类内存问题的方法论与清单"
+    },
+    {
+      "id": "G12",
+      "title": "长时录测与数据采集",
+      "batch": 2,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "stream_capture"
+        ]
+      }
+    },
+    {
+      "id": "G13",
+      "title": "交付物自动生成",
+      "batch": 5,
+      "probe": {
+        "kind": "core_has",
+        "names": [
+          "report_session"
+        ]
+      },
+      "note": "已实现 core.report_session：会话日志 → Markdown 交付报告（故障分析 + 原始日志附后），目标已存在时不默认覆盖"
+    }
+  ],
+  "liveVerified": [
+    "flash_firmware",
+    "flash_tool_detect",
+    "serial_list",
+    "serial_open",
+    "serial_read",
+    "serial_close",
+    "chip_info",
+    "reset_reason",
+    "flash_verify",
+    "timing_analysis",
+    "stream_capture"
+  ],
+  "liveVerifiedNote": "L2 只在真板子上跑过才登记。后 5 项（chip_info / reset_reason / flash_verify / timing_analysis / stream_capture）在 NUCLEO-H563ZI（STM32H563ZI，ST-Link V3，VCP=COM21）上跑齐，可复现路径是 `python tools/live_acceptance.py COM21 --swd --fw <固件>`：只读档 16 PASS / 0 FAIL / 4 SKIP，写完档（--allow-write，多覆盖 chip_info(mode='full') 读 UID 与「跑完把内核放回运行态」）24 PASS / 0 FAIL / 3 SKIP。交叉核对用的是受控固件（启动时按官方 CMSIS 的 RCC_RSR_*_Pos 自解复位标志并从 USART3 打印），与工具 core._RSR_BITS 的解码逐位一致——两条独立来源读出同一个答案，不是工具自己验自己。★ 注意 L3 那一列的判定：audit_capability 曾因「同名测试互相覆盖」把 flash_verify 的 L3 误判为假，已修（键改类名::函数名），修后这 5 项 L0–L6 六格全绿。",
+  "docNumbers": [
+    {
+      "file": "README.md",
+      "regex": "工具清单（(\\d+) 个）",
+      "metric": "mcp_tools",
+      "label": "README 工具清单标题"
+    },
+    {
+      "file": "README.md",
+      "regex": "MCP resources（(\\d+) 个",
+      "metric": "mcp_resources",
+      "label": "README 资源清单标题"
+    },
+    {
+      "file": "README.md",
+      "regex": "共 (\\d+) 张表 (\\d+) 条",
+      "metric": "errcode_tables",
+      "group": 1,
+      "label": "README 错误码表数"
+    },
+    {
+      "file": "README.md",
+      "regex": "共 (\\d+) 张表 (\\d+) 条",
+      "metric": "errcode_entries",
+      "group": 2,
+      "label": "README 错误码条数"
+    },
+    {
+      "file": "README.md",
+      "regex": "预验证驱动库（(\\d+) 款）",
+      "metric": "drivers",
+      "label": "README 驱动款数"
+    },
+    {
+      "file": "README.md",
+      "regex": "(\\d+) 条模式库",
+      "metric": "fault_rules",
+      "label": "README 规则条数"
+    },
+    {
+      "file": "ROADMAP.md",
+      "regex": "当前 MCP 面：工具 (\\d+) 个 / 资源 (\\d+) 个",
+      "metric": "mcp_tools",
+      "group": 1,
+      "label": "ROADMAP 当前工具数（B⑨ 现状行）"
+    },
+    {
+      "file": "ROADMAP.md",
+      "regex": "当前 MCP 面：工具 (\\d+) 个 / 资源 (\\d+) 个",
+      "metric": "mcp_resources",
+      "group": 2,
+      "label": "ROADMAP 当前资源数（B⑨ 现状行）"
+    },
+    {
+      "file": "README.md",
+      "regex": "共 (\\d+) 个工具 \\+ (\\d+) 个 MCP resources",
+      "metric": "mcp_tools",
+      "group": 1,
+      "label": "README 首段工具数"
+    },
+    {
+      "file": "README.md",
+      "regex": "共 (\\d+) 个工具 \\+ (\\d+) 个 MCP resources",
+      "metric": "mcp_resources",
+      "group": 2,
+      "label": "README 首段资源数"
+    },
+    {
+      "file": "README.md",
+      "regex": "\\+ (\\d+) 个 prompts",
+      "metric": "mcp_prompts",
+      "label": "README 首段 prompts 数"
+    }
+  ]
+}

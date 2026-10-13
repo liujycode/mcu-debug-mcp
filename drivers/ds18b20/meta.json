@@ -1,0 +1,8 @@
+{
+  "name": "ds18b20",
+  "desc": "DS18B20 单总线温度传感器驱动（CRC8+补码换算纯函数分离）",
+  "version": "1.0.0",
+  "verified": "CRC8/温度换算/复位值检测 Python 交叉验证通过（2026-09-20）；C 编译验证待 gcc 可用环境（Makefile 已备）",
+  "usage": "复制 ds18b20.h/ds18b20.c/ds18b20_port.h 进工程，port 层必须提供 DWT 微秒延时（HAL_Delay 毫秒粒度不够）",
+  "common_pitfalls": "750ms 等待不足→恒85.0；上拉缺失→全FF；读时序被中断打断→CRC错"
+}

@@ -1,0 +1,4 @@
+pyserial>=3.5
+mcp>=1.2.0
+# 可选：调试器探测（probe_list 工具）
+# pyocd>=0.36

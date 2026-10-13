@@ -1,0 +1,8 @@
+{
+  "name": "esp8266at",
+  "desc": "ESP8266/ESP-AT 响应解析库（IPD帧/CWJAP错误码/行分类全纯函数）",
+  "version": "1.0.0",
+  "verified": "IPD 双格式解析/行分类/CWJAP 错误码映射 Python 交叉验证通过（2026-09-20）；C 编译验证待 gcc 可用环境（Makefile 已备）",
+  "usage": "复制 esp8266at.h/esp8266at.c 进工程（纯解析无时序），串口收一行调 esp8266_classify_line 即可",
+  "common_pitfalls": "CH_PD未拉高→无响应；供电<500mA→发射时重启；指令结尾\\n→ERROR；CIPSEND未等>→丢数据"
+}

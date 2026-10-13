@@ -1,0 +1,12 @@
+{
+  "id": "cme",
+  "desc": "AT +CME ERROR 常用错误码（3GPP TS 27.007 子集）",
+  "source": "3GPP TS 27.007 +CME ERROR 节",
+  "entries": {
+    "3":  { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "操作不允许", "hint": "模块当前状态不允许该指令（先查当前模式）" },
+    "10": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 未插入", "hint": "查卡座接触与卡方向" },
+    "11": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 需要 PIN 码", "hint": "先用 AT+CPIN 解锁" },
+    "12": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 的 PIN 码错误", "hint": "注意剩余重试次数" },
+    "13": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 故障", "hint": "换卡验证；卡座簧片变形高发" }
+  }
+}

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 测试与审计（Python ${{ matrix.python-version }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 安装依赖
+        # pyocd 不装：CI 无探针，装了只会拖慢；探针相关测试会自动 skip
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest pyserial
+
+      - name: 单元测试（含 MCP 资源层 + 打包冒烟）
+        # 打包冒烟是真装到临时目录再跑知识类工具 —— 那处「装出来是空壳」的
+        # P0 缺陷只有这条测试抓得住，不许关。
+        run: python -m pytest -q
+
+      - name: C 驱动编译 + 逻辑测试
+        # 用系统 gcc 把 9 款驱动编一遍并跑同源逻辑测试
+        run: python tests/run_c_tests.py
+
+      - name: 知识库核验（条目级 source 强制）
+        run: python tests/validate_knowledge.py
+
+      - name: 常量一致性审计（同一事实多处定义）
+        run: python tests/audit_constants.py
+
+      - name: 能力面审计（只对「脱节」报错）
+        # 缺口是计划内的事，不阻塞；文档数字与实测不一致、或出现死代码才失败
+        run: python tests/audit_capability.py --quiet
+
+      - name: 打包产物结构核验
+        # 双保险：即使 pytest 里的冒烟被跳过，这一条也保证数据目录进包
+        run: |
+          python -m venv /tmp/venv-check
+          /tmp/venv-check/bin/pip install . --no-deps -q
+          /tmp/venv-check/bin/python - <<'PY'
+          import os, sys
+          sys.path.insert(0, os.path.join(sys.prefix, "lib"))
+          import glob
+          base = glob.glob(os.path.join(sys.prefix, "lib", "python*", "site-packages"))[0]
+          assert os.path.isdir(os.path.join(base, "knowledge")), "knowledge/ 没进包"
+          assert os.path.isdir(os.path.join(base, "drivers")), "drivers/ 没进包"
+          print("打包结构 OK：", base)
+          PY
