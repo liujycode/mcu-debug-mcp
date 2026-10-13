@@ -439,9 +439,11 @@ def baudrate_autodetect(port, candidates=None, sample_s=0.6, log_text=None):
                      "先复位一次再扫，或它本来就是静默的。")
     elif confident:
         lines.append("建议用 %d 打开：serial_open(port, %d)" % (good[0][0], good[0][0]))
-    elif good:
+    elif len(good) >= 2:
         # ★这是本工具最容易骗到人的场合：分数排出来了、看着都挺正常，但彼此
         #   差不多 ⟹ 排序没有意义，冠军只是候选表顺序的产物。
+        #   （2026-10-13：旧版只判 good 非空，单元素候选表会在 good[1][1] 上
+        #    IndexError——baudrate_autodetect(candidates=[115200]) 实测崩过）
         lines.append(
             "★判不出来：最高分 %.2f 与次高分 %.2f 只差 %.2f（门 %.2f），"
             "这批数据没有区分度，上面那个顺序【不代表真实波特率】，别照它改代码。"
@@ -475,7 +477,13 @@ def _at_line_match(buf, rx, loose=False):
             line = buf[start:end if end != -1 else len(buf)]
             return True, line.strip()
         return False, ""
-    for raw in buf.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+    # 2026-10-13：半包假 PASS。旧版把 split("\n") 的**最后一段**也当整行匹配，
+    # 而它可能是设备还没发完的半行：缓冲以 "OK" 结尾、"\r\n" 还在线上时，
+    # 旧代码判 PASS——设备实际要回 "OKX" 或 "ERROR" 也会中。
+    # 修法：整行模式下，未被 \n 终结的尾段不参与匹配（设备不吐换行时
+    # 会走到超时分支，届时 loose=true 是显式逃生门，比假 PASS 诚实）。
+    parts = buf.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for raw in parts[:-1]:
         line = raw.strip()
         if line and rx.fullmatch(line):
             return True, line
@@ -599,8 +607,18 @@ def serial_pair_record(port_a, port_b, seconds=10, baud_a=115200, baud_b=115200)
             return blocked
     try:
         sa = _open_serial(port=port_a, baudrate=int(baud_a), timeout=0.05)
+    except serial.SerialException as e:
+        return "打开失败：%s（确认两个口都存在且没被占用）" % e
+    # 2026-10-13：旧版两个口在同一个 try 里开，sb 开失败时 sa 的句柄
+    # 直接泄漏（异常路径不经 finally）——Windows 上句柄不释放，
+    # 下一次 pair_record 报「端口被占用」，而端口其实没人用。
+    try:
         sb = _open_serial(port=port_b, baudrate=int(baud_b), timeout=0.05)
     except serial.SerialException as e:
+        try:
+            sa.close()
+        except Exception:
+            pass
         return "打开失败：%s（确认两个口都存在且没被占用）" % e
 
     events = []     # (t, tag, bytes)
@@ -658,24 +676,36 @@ def serial_read(handle, seconds=2.0, expect=None, idle_ms=None):
         idle_deadline = time.time() + max(10, min(int(idle_ms), 30000)) / 1000.0
     buf = bytearray()
     matched = False
-    while time.time() < deadline:
-        n = ser.in_waiting
-        if n:
-            buf.extend(ser.read(n))
-            if idle_deadline is not None:
-                idle_deadline = time.time() + max(10, min(int(idle_ms), 30000)) / 1000.0
-            if expect is not None:
-                text_now = bytes(buf).decode("utf-8", errors="replace")
-                try:
-                    matched, _line = _at_line_match(text_now, re.compile(expect))
-                except re.error as e:
-                    return "expect 正则无效：%s（示例 \"OK\" 或 \"OK|ERROR\"）" % e
-                if matched:
+    # 2026-10-13：读循环旧版不捕串口异常——设备被拔/USB 重置时 ser.in_waiting
+    # 直接抛 SerialException 给 MCP 客户端（用户看到一坨栈，看不到排查方向）。
+    # 现在掉线=一种可诊断的结果：已收到的字节照常返回，并明说后半程丢了。
+    try:
+        while time.time() < deadline:
+            n = ser.in_waiting
+            if n:
+                buf.extend(ser.read(n))
+                if idle_deadline is not None:
+                    idle_deadline = time.time() + max(10, min(int(idle_ms), 30000)) / 1000.0
+                if expect is not None:
+                    text_now = bytes(buf).decode("utf-8", errors="replace")
+                    try:
+                        matched, _line = _at_line_match(text_now, re.compile(expect))
+                    except re.error as e:
+                        return "expect 正则无效：%s（示例 \"OK\" 或 \"OK|ERROR\"）" % e
+                    if matched:
+                        break
+            else:
+                time.sleep(0.02)
+                if idle_deadline is not None and time.time() >= idle_deadline:
                     break
-        else:
-            time.sleep(0.02)
-            if idle_deadline is not None and time.time() >= idle_deadline:
-                break
+    except Exception as e:
+        raw = bytes(buf)
+        _sess_append(s, raw.decode("utf-8", errors="replace"))
+        return ("handle=%d 读取中串口掉线（%s: %s）。\n"
+                "已收到 %d 字节（下方照常给出）。\n"
+                "排查：1) USB 线/ hub 供电是否稳；2) 设备是否刚被复位或重枚举"
+                "（设备管理器看端口号是否变）；3) 拔插后重新 serial_open。"
+                % (handle, type(e).__name__, e, len(raw)))
     raw = bytes(buf)
     text = raw.decode("utf-8", errors="replace")
     _sess_append(s, text)
@@ -722,20 +752,28 @@ def serial_send(handle, data, hex_mode=False, newline=True, expect=None, wait_s=
     buf = bytearray()
     matched = False
     deadline = time.time() + total
-    while time.time() < deadline:
-        n = s["port"].in_waiting
-        if n:
-            buf.extend(s["port"].read(n))
-            if expect is not None:
-                text_now = bytes(buf).decode("utf-8", errors="replace")
-                try:
-                    matched, _line = _at_line_match(text_now, re.compile(expect))
-                except re.error as e:
-                    return "expect 正则无效：%s（示例 \"OK\" 或 \"OK|ERROR\"）" % e
-                if matched:
-                    break
-        else:
-            time.sleep(0.02)
+    # 2026-10-13：等响应的读循环同样不捕异常——写成功但设备随后掉线时
+    # （写瞬间 USB 重枚举很常见），in_waiting 抛栈给客户端。已发字节数照常报告。
+    try:
+        while time.time() < deadline:
+            n = s["port"].in_waiting
+            if n:
+                buf.extend(s["port"].read(n))
+                if expect is not None:
+                    text_now = bytes(buf).decode("utf-8", errors="replace")
+                    try:
+                        matched, _line = _at_line_match(text_now, re.compile(expect))
+                    except re.error as e:
+                        return "expect 正则无效：%s（示例 \"OK\" 或 \"OK|ERROR\"）" % e
+                    if matched:
+                        break
+            else:
+                time.sleep(0.02)
+    except Exception as e:
+        _sess_append(s, bytes(buf).decode("utf-8", errors="replace"))
+        return ("已发送 %d 字节，但等响应时串口掉线（%s: %s）。\n"
+                "设备可能刚被复位或重枚举——重新 serial_open 后再试。"
+                % (len(payload), type(e).__name__, e))
     resp = bytes(buf).decode("utf-8", errors="replace")
     _sess_append(s, resp)
     head = "已发送 %d 字节%s" % (len(payload), "（含\\r\\n）" if (not hex_mode and newline) else "")
@@ -968,7 +1006,8 @@ def logs_prune(keep_days=None, keep_count=None, confirm=False, dry_run=True):
     return "\n".join(lines)
 
 
-def report_session(handle=None, fname=None, out_path=None, tail_lines=40, overwrite=False):
+def report_session(handle=None, fname=None, out_path=None, tail_lines=40,
+                   overwrite=False, confirm=False):
     """把一次串口会话导出成 Markdown 交付报告（能力缺口 G13）。
 
     为什么需要：调完之后总要把「现象 → 证据 → 结论 → 下一步」交出去
@@ -1049,9 +1088,19 @@ def report_session(handle=None, fname=None, out_path=None, tail_lines=40, overwr
         if os.path.exists(target) and not overwrite:
             return ("目标已存在：%s\n要覆盖请传 overwrite=True"
                     "（报告属交付物，不默认盖掉别人的文件）。" % target)
+        if os.path.exists(target) and overwrite and not confirm:
+            # 2026-10-13：覆盖已存在文件=毁掉原文件，先要一道显式确认。
+            # 旧版 overwrite=True 直接盖，且本操作完全没接 guard 闸门。
+            return ("目标已存在：%s\noverwrite=True 会**覆盖**它（没有回收站）。\n"
+                    "确认那确实是要盖掉的旧报告，带 confirm=True 再调。" % target)
     else:
         target = os.path.join(paths.writable_root(), "reports",
                               "%s_session_report.md" % time.strftime("%Y%m%d_%H%M%S"))
+    # 写本地文件同样过隔离闸门（2026-10-13 审查 P1：本操作此前完全没接，
+    # readonly 档下也能写/覆盖主机任意路径）
+    blocked = guard.check("session_report")
+    if blocked:
+        return blocked
     try:
         d = os.path.dirname(target)
         if d:
@@ -1601,6 +1650,13 @@ def error_code_lookup(table="", code=""):
     key, tables, err = _resolve_errcode_table(table)
     if err:
         return err
+    # 2026-10-13：与 errcode_table_get（1653 行起）对齐口径——空表名/空知识库
+    # 都要给可用提示，而不是 tables[None] 抛 KeyError（table="  " 实测崩过）。
+    if not tables:
+        return "错误码知识库为空（knowledge/error_codes/ 下没有 *.json）。"
+    if key is None:
+        return ('用法：error_code_lookup(table="esp_idf", code="0x105")\n可用：%s'
+                % "、".join(sorted(tables)))
 
     with open(tables[key], encoding="utf-8") as fh:
         d = json.load(fh)
@@ -2307,7 +2363,13 @@ def _sp_vals_from(text):
     vals = []
     for ln in _sp_lines(text or ""):
         if ln.startswith("Error:"):
-            return []
+            # 2026-10-13：旧版见 Error 行即 return []——哪怕前面已经收到有效
+            # 值行。CLI 的多步输出里 Error 常出现在成功读出的值**之后**
+            # （后续某一步失败），此时丢掉全部已读值等于自废硬证据
+            # （reset_reason 链就这么失去过寄存器实值）。
+            # 现在：停止继续收，但保留已收到的值；Error 原文仍在 text 里，
+            # 调用方要判失败看原文即可（2385 行起两个调用方都持有原文）。
+            break
         m = re.match(r"^0x[0-9A-Fa-f]{6,8}\s*:\s*(.+)$", ln)
         if not m:
             continue
@@ -2602,13 +2664,19 @@ def chip_info(mode="read", sn=None):
             if _sp_download(regs["flashsize"], 4, fs_path, sn, _SP_MODE_FULL):
                 with open(fs_path, "rb") as fh:
                     raw = fh.read()
-                kb = raw[0] | (raw[1] << 8)
-                if kb in (0x0000, 0xFFFF):
-                    lines.append("  %-12s: 寄存器未编程（0x%04X），按官方头文件规则取默认 2MB"
-                                 % ("Flash 实测", kb))
+                if len(raw) < 2:
+                    # 2026-10-13：_sp_download 只认「写出了文件」，不校验长度——
+                    # 探针半途掉线会留下空/截断文件，raw[1] 直接 IndexError。
+                    lines.append("  %-12s: 回读长度不足（%d 字节），读不出容量"
+                                 % ("Flash 实测", len(raw)))
                 else:
-                    lines.append("  %-12s: %d KB（寄存器 FLASHSIZE 低 16 位 × 1KB）"
-                                 % ("Flash 实测", kb))
+                    kb = raw[0] | (raw[1] << 8)
+                    if kb in (0x0000, 0xFFFF):
+                        lines.append("  %-12s: 寄存器未编程（0x%04X），按官方头文件规则取默认 2MB"
+                                     % ("Flash 实测", kb))
+                    else:
+                        lines.append("  %-12s: %d KB（寄存器 FLASHSIZE 低 16 位 × 1KB）"
+                                     % ("Flash 实测", kb))
             else:
                 lines.append("  %-12s: 读取失败" % "Flash 实测")
         finally:
@@ -2844,6 +2912,7 @@ def flash_verify(file_path, address=None, sn=None, chunk=65536):
     try:
         for idx, (addr, data) in enumerate(segs):
             seg_bad = 0
+            seg_ok = True          # False = 这一段没能完成比对（回读失败），不是"一致"
             first = None            # (段内偏移, 期望字节, 实际字节, 期望上下文, 实际上下文)
             off = 0
             while off < len(data):
@@ -2852,6 +2921,7 @@ def flash_verify(file_path, address=None, sn=None, chunk=65536):
                 a = addr + off
                 if not _sp_download(a, n, ap, sn, _SP_MODE_READ):
                     lines.append("  段%d @0x%08X +%d：回读失败（读不到内存）" % (idx, addr, off))
+                    seg_ok = False
                     bad_total += n
                     break
                 try:
@@ -2859,11 +2929,13 @@ def flash_verify(file_path, address=None, sn=None, chunk=65536):
                         got = fh.read()
                 except OSError as e:
                     lines.append("  段%d @0x%08X +%d：临时文件读不到（%s）" % (idx, addr, off, e))
+                    seg_ok = False
                     bad_total += n
                     break
                 if len(got) != n:
                     lines.append("  段%d @0x%08X +%d：回读长度不符（要 %d 得 %d）"
                                  % (idx, addr, off, n, len(got)))
+                    seg_ok = False
                     bad_total += n
                     break
                 for i in range(n):
@@ -2875,7 +2947,12 @@ def flash_verify(file_path, address=None, sn=None, chunk=65536):
                                      data[off + lo:off + hi], got[lo:hi])
                 off += n
             bad_total += seg_bad
-            if seg_bad == 0:
+            if not seg_ok:
+                # 2026-10-13：此前这里只判 seg_bad == 0，回读失败也打印
+                # "✓ 完全一致" —— 校验工具给假通过（探针掉线也报固件已正确烧入）。
+                lines.append("  段%d @0x%08X  %6d 字节  ？ 未能校验（回读失败，"
+                             "不能认定一致）" % (idx, addr, len(data)))
+            elif seg_bad == 0:
                 lines.append("  段%d @0x%08X  %6d 字节  ✓ 完全一致" % (idx, addr, len(data)))
             else:
                 fo, exp, act, ctx_e, ctx_a = first
@@ -2894,8 +2971,9 @@ def flash_verify(file_path, address=None, sn=None, chunk=65536):
         lines.append("  注意：这只证明「文件写进去了」，不证明「固件能跑」——")
         lines.append("  跑没跑起来要看串口有没有输出（serial_read / stream_capture）。")
     else:
-        lines.append("结论：✗ 有 %d 字节与文件不一致（可能烧录被中断、扇区被写保护、"
-                     "或文件里带的地址与实际烧录地址不一致）。" % bad_total)
+        lines.append("结论：✗ 有 %d 字节未通过校验（不一致或回读失败）。" % bad_total)
+        lines.append("  其中含回读失败的字节不计为「证明一致」——探针掉线/SWD 断开/"
+                     "读保护打开时先修链路，再谈烧录结果。")
         lines.append("  排查顺序：1) 重烧一次看是否复现；2) 看 flash 写保护 / 读保护设置"
                      "（chip_info(mode=\"full\") 看选项字节）；")
         lines.append("            3) 确认 address 参数与烧录时给的起始地址一致。")
@@ -3190,7 +3268,9 @@ def stream_capture(port, seconds=10.0, baudrate=115200, max_lines=0,
     except (TypeError, ValueError):
         return "参数类型不对：seconds/baudrate/max_lines/idle_stop_s 都要是数字。"
 
-    blocked = guard.check("serial_open", port)
+    # 2026-10-13：旧版复用 serial_open（read 档）过闸——长时独占的口径
+    # 比占 3 秒的 pair_record 还松，矛盾。改用独立登记的 stream_capture（write 档）。
+    blocked = guard.check("stream_capture", port)
     if blocked:
         return blocked
     try:
@@ -3455,9 +3535,17 @@ def _bridge_port(port):
 
 
 def _bridge_lines(text):
-    """把桥回话切成有效行：丢掉空行与 `#` 开头的异步日志。"""
+    """把桥回话切成**已完结**的有效行：丢空行、`#` 异步日志，以及未终止的半行。
+
+    ★ 2026-10-13：旧版把 split("\\n") 的尾段（设备还在发的半行）也当有效行，
+      _bridge_cmd 会拿它当完整应答——"+OK SPI SCAN bus=0 n=2" 的换行还在
+      线上时，"slots=..." 字段仍在路上，提前返回就静默丢字段，而调用方
+      看到的是「解析成功」。现在只认被 \\n 终结的行（桥是请求-响应协议，
+      半行一律等齐）。
+    """
     out = []
-    for ln in (text or "").replace("\r", "").split("\n"):
+    parts = (text or "").replace("\r", "").split("\n")
+    for ln in parts[:-1]:                       # 丢掉未终结的尾段
         t = ln.strip()
         if t and not t.startswith("#"):
             out.append(t)
@@ -4212,19 +4300,32 @@ def decode_register(value, fields, width=32):
             skipped.append(repr(f))
             continue
         name = f.get("name", "?")
-        if "bit" in f:
-            lsb, w = int(f["bit"]), 1
-        elif "lsb" in f and "width" in f:
-            lsb, w = int(f["lsb"]), int(f["width"])
-        elif "bits" in f and len(f["bits"]) == 2:
-            a, b = sorted(int(x) for x in f["bits"])
-            # 二义性：[lsb,msb] 与 [pos,width] 都常见——msb>=lsb 且差值小当区间，否则当 pos,width
-            if b - a <= 16:
-                lsb, w = a, b - a + 1
+        # 2026-10-13：字段级解析旧版裸 int() + 无值域校验——{"bit":"x"} 抛
+        # ValueError、负 width 抛 "negative shift count"，全都直接冒出工具层。
+        # 现在：解析失败或越界统一走「跳过 + 汇总行」，与既有 skipped 机制合流。
+        try:
+            if "bit" in f:
+                lsb, w = int(f["bit"]), 1
+            elif "lsb" in f and "width" in f:
+                lsb, w = int(f["lsb"]), int(f["width"])
+            elif "bits" in f and len(f["bits"]) == 2:
+                a, b = sorted(int(x) for x in f["bits"])
+                # 二义性：[lsb,msb] 与 [pos,width] 都常见——msb>=lsb 且差值小当区间，否则当 pos,width
+                if b - a <= 16:
+                    lsb, w = a, b - a + 1
+                else:
+                    lsb, w = a, b
             else:
-                lsb, w = a, b
-        else:
-            lines.append("  %s：字段定义缺 bit 或 lsb+width，跳过" % name)
+                lines.append("  %s：字段定义缺 bit 或 lsb+width，跳过" % name)
+                skipped.append(name)
+                continue
+        except (TypeError, ValueError):
+            lines.append("  %s：字段定义里的数字解析不了（%r），跳过" % (name, f))
+            skipped.append(name)
+            continue
+        if lsb < 0 or w <= 0 or lsb + w > 64:
+            lines.append("  %s：位域起点 %d 宽度 %d 超出 0~63 合法范围，跳过"
+                         % (name, lsb, w))
             skipped.append(name)
             continue
         mask = (1 << w) - 1
@@ -5874,6 +5975,12 @@ def symbol_lookup(path, addresses):
     for raw, n in want:
         if n is None:
             lines.append("  %-14s ✗ 无法解析为整数地址" % str(raw))
+            continue
+        if not addrs_sorted:
+            # 2026-10-13：符号表地址全为 0（未链接 map / 被 strip）时
+            # addrs_sorted 为空，下面 addrs_sorted[0] 会 IndexError。
+            lines.append("  %-14s ✗ 符号表为空或地址全为 0"
+                         "（map 未参与链接或已被 strip），无法定位" % str(raw))
             continue
         # 找 <= 该地址的最近符号
         i = bisect.bisect_right(addrs_sorted, n) - 1

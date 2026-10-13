@@ -285,6 +285,28 @@ OPS = {
                 "写完后想确认落没落进去，用 i2c_write_reg(..., verify=True) 回读比对"
                 "（注意只写寄存器回读必然不一致，别把那个当成缺陷）。"),
     },
+    "session_report": {
+        "title": "生成会话报告（写本地文件）",
+        "needs": "write",
+        "irreversible": False,
+        "why": ("会在本地磁盘写一个 Markdown 报告。默认落 <数据根>/reports/ 且不覆盖已存在文件；"
+                "但 out_path 可指定**任意路径**——2026-10-13 审查发现本操作此前完全没接闸门，"
+                "readonly 档下也能覆盖主机上任何可写文件（配 overwrite=True）。"
+                "覆盖别人文件的后果与该文件的重要性成正比，且没有回收站。"),
+        "how": ("报告默认写 <数据根>/reports/（三层定位见 paths.py），要落到别处再显式 out_path；"
+                "目标已存在时不覆盖，除非 overwrite=True + confirm=True —— 后者会真的盖掉原文件。"),
+    },
+    "stream_capture": {
+        "title": "长时录测（持续独占一个串口）",
+        "needs": "write",
+        "irreversible": False,
+        "why": ("会把一个串口**持续独占**几十到几百秒（seconds 上限 600），期间别的软件"
+                "打不开它，设备的数据也被这边收走。2026-10-13 审查发现它此前复用 "
+                "serial_open（read 档）过闸——而占用时长远大于 pair_record 的后者反而是 "
+                "write 档，口径矛盾：占 3 秒要写权限、占 300 秒却只要读权限。"),
+        "how": ("确认这个口接下来几分钟没人用、也不影响设备状态，再放开写权限。"
+                "只是想看一眼当前输出，用 serial_read（秒级）就够，不必长录。"),
+    },
 }
 
 
@@ -307,6 +329,25 @@ def _reject(op_id, port, extra_lines=None):
     return "\n".join(lines)
 
 
+def _need_confirm(op_id, port=None):
+    """不可逆操作缺 confirm 时的拦截文案（抽出来给虚拟口分支复用）。"""
+    op = OPS[op_id]
+    lines = ["【需要二次确认】%s 是不可逆操作，已阻止执行。" % op["title"],
+             "  当前档位   : %s" % mode_banner()]
+    if port:
+        lines.append("  目标端口   : %s" % port)
+    lines.append("  这个操作会做什么 : %s" % op["why"])
+    # 二次确认的「怎么做」按操作区分：不是每个不可逆操作都有 dry_run 那一步。
+    # 早期这里对所有操作都写「先用 dry_run=True」，对 reset_flags_clear 是错的 ——
+    # 它根本没有 dry_run 参数，照那句做会找不到参数、以为工具坏了。
+    lines.append("  怎么做     : %s" % op.get(
+        "confirm_hint",
+        "先用 dry_run=True（默认）拿到完整命令逐字核对，"
+        "确认无误后带 dry_run=False + confirm=True 再调用。"))
+    lines.append("  —— 不可逆操作不靠「相信调用方」，靠参数门禁。")
+    return "\n".join(lines)
+
+
 def check(op_id, port=None, confirm=False):
     """统一闸门。放行返回 None；拦截返回**可读的中文说明**（不是异常）。
 
@@ -320,8 +361,15 @@ def check(op_id, port=None, confirm=False):
                 "（含 needs / irreversible / 风险说明）后再调用。" % op_id)
     if mode() == MODE_OFF:
         return None
+    op = OPS[op_id]
     if is_virtual_port(port):
-        # 纯软件回环：外部零副作用，不适用档位与名单（见 VIRTUAL_PORT_PREFIXES）
+        # 纯软件回环：外部零副作用，不适用档位与名单（见 VIRTUAL_PORT_PREFIXES）。
+        # ★ 但**不豁免不可逆的二次确认**（2026-10-13 审查 P1）：旧版在这里
+        #   直接 return None，排在 confirm 检查之前 ⟹ loop:// 也能跳过
+        #   不可逆确认。当前虚拟口打不到真硬件，但闸门顺序本身就是错的——
+        #   哪天 loop:// 后面接了真动作（比如将来的虚拟 flash），这道闸就空了。
+        if op["irreversible"] and not confirm:
+            return _need_confirm(op_id, port)
         return None
 
     ok, msg = port_verdict(port)
@@ -329,25 +377,11 @@ def check(op_id, port=None, confirm=False):
         return "【隔离拦截】已拒绝：%s\n  当前档位   : %s\n  %s" % (
             OPS[op_id]["title"], mode_banner(), msg)
 
-    op = OPS[op_id]
     if op["needs"] == "write" and mode() == MODE_READONLY:
         return _reject(op_id, port)
 
     if op["irreversible"] and not confirm:
-        lines = ["【需要二次确认】%s 是不可逆操作，已阻止执行。" % op["title"],
-                 "  当前档位   : %s" % mode_banner()]
-        if port:
-            lines.append("  目标端口   : %s" % port)
-        lines.append("  这个操作会做什么 : %s" % op["why"])
-        # 二次确认的「怎么做」按操作区分：不是每个不可逆操作都有 dry_run 那一步。
-        # 早期这里对所有操作都写「先用 dry_run=True」，对 reset_flags_clear 是错的 ——
-        # 它根本没有 dry_run 参数，照那句做会找不到参数、以为工具坏了。
-        lines.append("  怎么做     : %s" % op.get(
-            "confirm_hint",
-            "先用 dry_run=True（默认）拿到完整命令逐字核对，"
-            "确认无误后带 dry_run=False + confirm=True 再调用。"))
-        lines.append("  —— 不可逆操作不靠「相信调用方」，靠参数门禁。")
-        return "\n".join(lines)
+        return _need_confirm(op_id, port)
     return None
 
 

@@ -334,9 +334,22 @@ def _minimal_elf(data, vaddr=0x08000000, name=".text", typ=1):
 
 
 def _make_ihex(addr, data):
-    """生成一条合法 Intel HEX 记录（校验和现算）。"""
+    """生成合法 Intel HEX（高 16 位走 0x04 线性地址扩展记录，校验和现算）。
+
+    ★ 2026-10-13 修：旧版把 0x08000000 直接塞进 16 位记录地址字段
+      （截成 0x0000）且不发 0x04 记录——夹具造假，解析器如实解出 0x00000000，
+      测试却从来没发现（旧 flash_verify 回读失败也打印"✓ 完全一致"，
+      这条测试就这么绿了两年）。Intel HEX 的地址字段只有 16 位，
+      0x08000000 必须由 :020000040800F2 这类扩展记录提供。
+    """
+    out = []
+    hi = (addr >> 16) & 0xFFFF
+    if hi:
+        body = bytes([2, 0, 0, 0x04, (hi >> 8) & 0xFF, hi & 0xFF])
+        out.append(":" + (body + bytes([(-sum(body)) & 0xFF])).hex().upper())
     body = bytes([len(data), (addr >> 8) & 0xFF, addr & 0xFF, 0x00]) + data
-    return ":" + (body + bytes([(-sum(body)) & 0xFF])).hex().upper() + "\n"
+    out.append(":" + (body + bytes([(-sum(body)) & 0xFF])).hex().upper())
+    return "\n".join(out) + "\n"
 
 
 class FlashVerifyTest(unittest.TestCase):
@@ -385,12 +398,21 @@ class FlashVerifyTest(unittest.TestCase):
         self.assertIn("期望 0x64，实际 0x9B", out)
 
     def test_hex_uses_record_addresses(self):
+        """hex 校验必须用记录里的地址（不是默认 0x08000000，更不是 0）。
+
+        ★ 2026-10-13：此测试曾经是假绿灯——夹具 _make_ihex 把 0x08000000
+          截成 16 位假记录，段地址实际解析成 0x00000000，回读失败，
+          而旧 flash_verify 回读失败也打印"✓ 完全一致"，测试只看段行
+          字符串就过。现在夹具合规 + 断言段地址，两条路都钉死。
+        """
         blob = b"\xDE\xAD\xBE\xEF"
         p = self._tmp("fw.hex", (_make_ihex(0x08000000, blob) + ":00000001FF\n").encode())
         with mock.patch.object(core, "_which_tool", _which_ok), \
                 mock.patch.object(core, "_sp_download", self._dl_from(blob)):
             out = core.flash_verify(p)
+        self.assertIn("0x08000000", out)          # 段地址来自记录，不是 0
         self.assertIn("✓ 完全一致", out)
+        self.assertNotIn("未能校验", out)
 
     def test_elf_reads_section_bytes_by_file_offset(self):
         """★ 回归：elf 段必须按 sh_offset 取字节，否则永远报「没有可校验段」。"""
@@ -435,7 +457,12 @@ class FlashVerifyTest(unittest.TestCase):
             self.assertIn("没找到", core.flash_verify(pb))
 
     def test_read_failure_is_reported_not_treated_as_match(self):
-        """回读失败绝不能算通过 —— 那是「没验成」而不是「验过了」。"""
+        """回读失败绝不能算通过 —— 那是「没验成」而不是「验过了」。
+
+        ★ 2026-10-13 加强：旧版只断言了总结行有 ✗，可段行照样打印
+          "✓ 完全一致"——一份自相矛盾的输出（段说一致、总结说不一致）。
+          现在两头都钉：总结 ✗、段行必须"未能校验"且禁止出现"✓ 完全一致"。
+        """
         blob = b"\x01\x02\x03\x04"
         p = self._tmp("fw.bin", blob)
         with mock.patch.object(core, "_which_tool", _which_ok), \
@@ -443,6 +470,8 @@ class FlashVerifyTest(unittest.TestCase):
             out = core.flash_verify(p)
         self.assertIn("回读失败", out)
         self.assertIn("✗", out)
+        self.assertIn("未能校验", out)
+        self.assertNotIn("✓ 完全一致", out)
 
 
 # ---------------------------------------------------------------- timing_analysis
@@ -545,7 +574,9 @@ class StreamCaptureTest(unittest.TestCase):
 
     def _run(self, fake_port, **kw):
         port = kw.pop("port", "COM_TEST")
-        with relaxed_env(mode="readonly"):
+        # 2026-10-13：stream_capture 改登记为 write 档（长时独占口径），
+        # 行为测试要在 write 档下跑（隔离本身由 test_isolation.py 专测）。
+        with relaxed_env(mode="write"):
             with mock.patch.object(core, "_open_serial",
                                    lambda **k: fake_port):
                 return core.stream_capture(port, **kw)
@@ -578,7 +609,7 @@ class StreamCaptureTest(unittest.TestCase):
         out_path = os.path.join(d, "chain.log")
         chunks = [b"TICK %d\r\n" % i for i in (1, 2, 3, 9, 10, 11)]
         fp = _FakePort(chunks, delay=0.03)
-        with relaxed_env(mode="readonly"):
+        with relaxed_env(mode="write"):
             with mock.patch.object(core, "_open_serial", lambda **k: fp):
                 txt = core.stream_capture("COM_TEST", seconds=2.0, out_path=out_path)
         self.assertIn("已落盘", txt)
@@ -595,7 +626,7 @@ class StreamCaptureTest(unittest.TestCase):
         """
         d = tempfile.mkdtemp(prefix="mcp-cap-")
         out_path = os.path.join(d, "burst.log")
-        with relaxed_env(mode="readonly"):
+        with relaxed_env(mode="write"):
             with mock.patch.object(core, "_open_serial",
                                    lambda **k: _FakePort([b"A\nB\nC\nD\nE\n"])):
                 core.stream_capture("COM_TEST", seconds=0.3, out_path=out_path)

@@ -52,12 +52,16 @@ class FakeBridge(object):
     用来验证「异步日志必须被忽略」。
     """
 
-    def __init__(self, handlers=None, ping=_PING_OK, silent=False, logs=()):
+    def __init__(self, handlers=None, ping=_PING_OK, silent=False, logs=(),
+                 bare=False):
         self.handlers = dict(_HEALTHY)
         self.handlers.update(handlers or {})
         self.ping = ping
         self.silent = silent
         self.logs = list(logs)
+        # bare=True：回话**不带** \\r\\n 终结——模拟半包（换行还在线上），
+        # 2026-10-13 用于钉死「未终结的半行不当完整应答」。
+        self.bare = bare
         self.written = []
         self.closed = False
         self._out = b""
@@ -75,7 +79,8 @@ class FakeBridge(object):
         if reply is None:
             return
         buf = "".join(ln + "\r\n" for ln in self.logs)
-        self._out += (buf + reply + "\r\n").encode("ascii", "replace")
+        tail = "" if self.bare else "\r\n"
+        self._out += (buf + reply + tail).encode("ascii", "replace")
 
     def flush(self):
         pass
@@ -174,6 +179,22 @@ class BridgeHandshakeTest(unittest.TestCase):
         self.assertIn("MCU_DEBUG_BRIDGE_PORT", out)
         # 必须说清「不会自动扫口」，否则用户会以为是工具坏了
         self.assertIn("不会", out)
+
+    def test_unterminated_reply_is_not_taken_as_complete(self):
+        """半包不当完整应答（2026-10-13 修 `_bridge_lines`）。
+
+        回话没有 \\r\\n 终结时，旧版把 split("\\n") 的尾段也当有效行 ——
+        "+OK I2C SCAN bus=0 n=1 addrs=0x4a" 的换行还在线上，后半截字段
+        还在路上，提前返回就**静默丢字段**，而调用方看到的是「解析成功」。
+        现在只认被 \\n 终结的行：半包 → 等 → 超时如实说，不给假结论。
+        """
+        br = FakeBridge(handlers={"I2C SCAN": "+OK I2C SCAN bus=0 n=1 addrs=0x4a"},
+                        bare=True)
+        with _bridged(br):
+            out = core.i2c_scan(0, "COM21", timeout=0.3)
+        self.assertNotIn("0x4a", out)          # 半行里的地址不能成为结论
+        self.assertNotIn("应答器件", out)       # 不能渲染出扫描结果
+        self.assertIn("超时", out)             # 如实说没等到完整应答
 
     def test_bridge_probe_reports_caps(self):
         with _bridged(FakeBridge()):

@@ -8,6 +8,20 @@
 
 ---
 
+## 漏洞报告（如何私下联系维护者）
+
+发现安全缺陷（隔离层可绕过、危险操作缺闸门、误报"安全"的结论等），请**私下**报告，
+不要先开公开 issue：
+
+- **GitHub Private Vulnerability Report**（推荐）：
+  <https://github.com/liujycode/mcu-debug-mcp/security/advisories/new>
+- 或开一个标题带 `[security]` 的 issue 并**只描述影响范围**，不附复现细节，维护者会转私密渠道。
+
+本项目会真的操作硬件，因此隔离类缺陷按**高优先级**处理；确认后先在 SECURITY.md 的
+矩阵里补登记，再发修复版本（版本策略见 CHANGELOG：主版本 = 接口契约变更）。
+
+---
+
 ## 一、默认状态（什么都不配的时候）
 
 | 项 | 默认值 | 含义 |

@@ -1,12 +1,15 @@
 {
   "id": "cme",
   "desc": "AT +CME ERROR 常用错误码（3GPP TS 27.007 子集）",
-  "source": "3GPP TS 27.007 +CME ERROR 节",
+  "source": "3GPP TS 27.007 §9.2.1 +CME ERROR 表",
   "entries": {
-    "3":  { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "操作不允许", "hint": "模块当前状态不允许该指令（先查当前模式）" },
-    "10": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 未插入", "hint": "查卡座接触与卡方向" },
-    "11": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 需要 PIN 码", "hint": "先用 AT+CPIN 解锁" },
-    "12": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 的 PIN 码错误", "hint": "注意剩余重试次数" },
-    "13": { "source": "3GPP TS 27.007 +CME ERROR 节", "meaning": "SIM 故障", "hint": "换卡验证；卡座簧片变形高发" }
+    "3":  { "source": "3GPP TS 27.007 §9.2.1", "meaning": "operation not allowed（操作不允许）", "hint": "模块当前状态不允许该指令（先查当前模式）" },
+    "10": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "SIM not inserted（SIM 未插入）", "hint": "查卡座接触与卡方向" },
+    "11": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "SIM PIN required（需要 PIN 码解锁）", "hint": "先用 AT+CPIN=\"<PIN>\" 解锁；注意剩余重试次数" },
+    "12": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "SIM PUK required（PIN 已锁死，需 PUK 解锁）", "hint": "不要再试 PIN！用 AT+CPIN=\"<PUK>\",\"<新PIN>\" 解锁；PUK 也有次数限制，用完 SIM 报废" },
+    "13": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "SIM failure（SIM 故障）", "hint": "换卡验证；卡座簧片变形高发" },
+    "14": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "SIM busy（SIM 正忙）", "hint": "稍后重试；频繁出现查电源带载能力" },
+    "15": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "SIM wrong（SIM 不识别/不匹配）", "hint": "换一张已知良好的卡验证；确认卡型（普通/NB-IOT 专用）" },
+    "16": { "source": "3GPP TS 27.007 §9.2.1", "meaning": "incorrect password（密码错误，含 PIN/PIN2/PUK 尝试失败）", "hint": "注意剩余重试次数；PIN 累计用尽会升级成 CME 12（需 PUK）" }
   }
 }

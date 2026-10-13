@@ -1,0 +1,30 @@
+# sdist 必须包含的非 .py 资产
+# ★ 为什么需要这个文件（2026-10-13 实测复现的 P0）：
+#   setup.py 的 build_py 钩子只作用于 wheel 直构路径；而 `python -m build` 的
+#   标准流程是「先打 sdist → 解包 → 再构 wheel」，sdist 里没有数据目录时，
+#   wheel 会跟着变空壳（knowledge+drivers 60 个文件全丢，用户 pip install
+#   后 error_code_lookup 回「知识库为空」）。MANIFEST.in 是 sdist 的唯一
+#   收录清单，漏一行就复发一次。
+include README.md
+include LICENSE
+include SECURITY.md
+include CHANGELOG.md
+include ROADMAP.md
+include PLAN.md
+include requirements.txt
+recursive-include knowledge *.json *.md
+recursive-include drivers *.c *.h *.json *.md
+prune drivers/**/build
+prune drivers/**/*.bin
+prune drivers/**/*.elf
+prune drivers/**/*.map
+recursive-include tools *.py *.c *.h *.ld *.md
+prune tools/**/build
+prune tools/**/*.bin
+prune tools/**/*.elf
+prune tools/**/*.map
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include .github *.yml *.yaml
+include pyproject.toml setup.py
+global-exclude __pycache__ *.pyc *.pyo

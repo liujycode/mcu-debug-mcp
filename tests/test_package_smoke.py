@@ -185,7 +185,15 @@ class TestDataRootWiring(unittest.TestCase):
 
 @unittest.skipIf(SKIP_SMOKE, "已用 MCU_DEBUG_MCP_SKIP_PACK_SMOKE=1 关闭装包冒烟")
 class TestPackageInstallSmoke(unittest.TestCase):
-    """慢层：真装真跑。**这条测试是那处 P0 缺陷死掉的原因。**"""
+    """慢层：真装真跑。**这条测试是那处 P0 缺陷死掉的原因。**
+
+    ★ 2026-10-13 补：旧版只有 `pip install . --target` 一条安装源 —— 那是
+      **从源码树直接建 wheel**，正好绕开 `python -m build` 的标准发布流程
+      （sdist → 解包 → 再构 wheel）。于是 sdist 丢了 knowledge/drivers 时
+      冒烟依旧 9 passed，空壳照样发出去（审查报告 P0-2，实测复现）。
+      现在 setUpClass 真构建一次 sdist + wheel，两个测试分别从
+      **tar.gz 与 whl** 安装跑同一套探针断言——两条分发路径都必须有牙。
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -195,6 +203,97 @@ class TestPackageInstallSmoke(unittest.TestCase):
             import setuptools  # noqa: F401
         except ImportError:
             raise unittest.SkipTest("本环境没有 setuptools，无法构建（真实环境缺失）")
+        try:
+            import build  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("本环境没有 build 包，无法构建 sdist/wheel（真实环境缺失）")
+
+        cls.dist = tempfile.mkdtemp(prefix="mcu_dbg_dist_")
+        r = subprocess.run(
+            [sys.executable, "-m", "build", "--no-isolation",
+             "--outdir", cls.dist, ROOT],
+            cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        if r.returncode != 0:
+            # 构建失败就是失败。这里不是环境问题，是打包坏了。
+            raise AssertionError(
+                "python -m build 失败 —— 这不是环境问题，是打包坏了。\n"
+                "原始输出（尾 1500 字）：\n%s" % ((r.stderr or "") + (r.stdout or ""))[-1500:])
+        sdists = [f for f in os.listdir(cls.dist) if f.endswith(".tar.gz")]
+        wheels = [f for f in os.listdir(cls.dist) if f.endswith(".whl")]
+        if not sdists:
+            raise AssertionError("build 没产出 sdist（.tar.gz）：%s" % os.listdir(cls.dist))
+        if not wheels:
+            raise AssertionError("build 没产出 wheel（.whl）：%s" % os.listdir(cls.dist))
+        cls.sdist_path = os.path.join(cls.dist, sdists[0])
+        cls.wheel_path = os.path.join(cls.dist, wheels[0])
+        cls._keep = []
+
+    @classmethod
+    def tearDownClass(cls):
+        for d in getattr(cls, "_keep", []):
+            shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(getattr(cls, "dist", ""), ignore_errors=True)
+
+    def _install_and_probe(self, artifact, tag):
+        """从**一个构建产物**（sdist 或 wheel）装到临时目录，跑探针，返回数据。"""
+        tgt = tempfile.mkdtemp(prefix="mcu_dbg_%s_" % tag)
+        self._keep.append(tgt)
+        r = subprocess.run(
+            [sys.executable, "-m", "pip", "install", artifact, "--no-deps",
+             "--no-build-isolation", "--target", tgt, "-q"],
+            cwd=tgt, capture_output=True, text=True,
+            # ★ 必须显式 utf-8 + errors="replace"：Windows 下 text=True 走 locale
+            #   编码（GBK），而 pip 的输出里带中文（本包 description 就是中文）。
+            #   一旦撞上非 GBK 字节，subprocess 的读线程会抛 UnicodeDecodeError，
+            #   r.stderr 直接变 None，然后 r.stderr[-1200:] 抛 TypeError——
+            #   报错信息指向的是测试自己，而不是真正的原因。
+            encoding="utf-8", errors="replace",
+        )
+        if r.returncode != 0:
+            # ★这里曾经是 skipTest —— 于是「打包坏了」被伪装成「环境不支持」，
+            #   测试永远绿，而缺陷照样发出去（PLAN.md §2 那处 P0 就是这样活下来的）。
+            #   安装失败就是失败，没有中间地带。
+            self.fail("pip 装 %s 失败 —— 这不是环境问题，是打包坏了。\n原始输出（尾 1200 字）：\n%s"
+                      % (tag, (r.stderr or "")[-1200:]))
+
+        # 数据文件必须真的在包里（数量级断言，不是「存在即可」）
+        n_know = sum(len(f) for _d, _s, f in os.walk(os.path.join(tgt, "knowledge")))
+        n_drv = sum(len(f) for _d, _s, f in os.walk(os.path.join(tgt, "drivers")))
+        self.assertGreaterEqual(n_know, 10, "[%s] knowledge/ 没进包" % tag)
+        self.assertGreaterEqual(n_drv, 40, "[%s] drivers/ 没进包" % tag)
+
+        probe = os.path.join(tgt, "_smoke_probe.py")
+        with open(probe, "w", encoding="utf-8") as fh:
+            fh.write(_PROBE_SRC.format(tgt=tgt, root=ROOT))
+        r2 = subprocess.run([sys.executable, probe], cwd=tgt,
+                            capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        self.assertEqual(r2.returncode, 0, "[%s] 装出来的包跑不起来：%s"
+                         % (tag, (r2.stderr or "")[-500:]))
+        return json.loads(r2.stdout.strip().splitlines()[-1])
+
+    def _assert_probe(self, data, tag):
+        self.assertTrue(data["core_from_target"],
+                        "[%s] import 到的不是装出来的包（测试写错了，等于没测）：%s"
+                        % (tag, data["core_file"]))
+        self.assertGreaterEqual(data["pinmaps"], 3, "[%s] 装出来后引脚库为空" % tag)
+        self.assertGreaterEqual(data["boards"], 3, "[%s] 装出来后板级库为空" % tag)
+        self.assertGreaterEqual(data["drivers"], 9, "[%s] 装出来后驱动库为空" % tag)
+        self.assertGreaterEqual(data["errcode_tables"], 6, "[%s] 装出来后错误码表为空" % tag)
+        self.assertGreaterEqual(data["fault_bits"], 1, "[%s] 装出来后故障位域表为空" % tag)
+        self.assertGreaterEqual(data["extra_rules"], 10, "[%s] 装出来后外置规则没加载" % tag)
+        self.assertTrue(data["driver_get_real"], "[%s] driver_get 读不到真内容" % tag)
+        self.assertTrue(data["errcode_real"], "[%s] error_code_lookup 说知识库为空" % tag)
+
+        # 隔离层必须随包分发且默认锁着写 —— 否则 pip 装的版本是「裸奔」的，
+        # 用户以为有防护，实际任何一次调用都能直接动他的设备。
+        self.assertEqual(data["guard_default_mode"], "readonly",
+                         "[%s] 装出来的包默认档位不是 readonly：%s"
+                         % (tag, data["guard_default_mode"]))
+        self.assertTrue(data["guard_blocks_write"],
+                        "[%s] 装出来的包里隔离层没拦住写操作（闸门没随包生效）" % tag)
 
     def test_install_is_idempotent(self):
         """连续装两次都必须成功。
@@ -224,60 +323,20 @@ class TestPackageInstallSmoke(unittest.TestCase):
         finally:
             shutil.rmtree(tgt, ignore_errors=True)
 
-    def test_installed_package_has_real_knowledge(self):
-        tgt = tempfile.mkdtemp(prefix="mcu_dbg_pkg_")
-        try:
-            r = subprocess.run(
-                [sys.executable, "-m", "pip", "install", ".", "--no-deps",
-                 "--no-build-isolation", "--target", tgt, "-q"],
-                cwd=ROOT, capture_output=True, text=True,
-                # ★ 必须显式 utf-8 + errors="replace"：Windows 下 text=True 走 locale
-                #   编码（GBK），而 pip 的输出里带中文（本包 description 就是中文）。
-                #   一旦撞上非 GBK 字节，subprocess 的读线程会抛 UnicodeDecodeError，
-                #   r.stderr 直接变 None，然后 r.stderr[-1200:] 抛 TypeError——
-                #   报错信息指向的是测试自己，而不是真正的原因。
-                encoding="utf-8", errors="replace",
-            )
-            if r.returncode != 0:
-                # ★这里曾经是 skipTest —— 于是「打包坏了」被伪装成「环境不支持」，
-                #   测试永远绿，而缺陷照样发出去（PLAN.md §2 那处 P0 就是这样活下来的）。
-                #   构建失败就是失败，没有中间地带。
-                self.fail("pip 装包失败 —— 这不是环境问题，是打包坏了。\n原始输出（尾 1200 字）：\n%s" % (r.stderr or "")[-1200:])
+    def test_knowledge_from_wheel(self):
+        """★ 2026-10-13 新增：从 **wheel** 安装跑探针（分发路径①）。"""
+        data = self._install_and_probe(self.wheel_path, "wheel")
+        self._assert_probe(data, "wheel")
 
-            # 数据文件必须真的在包里（数量级断言，不是「存在即可」）
-            n_know = sum(len(f) for _d, _s, f in os.walk(os.path.join(tgt, "knowledge")))
-            n_drv = sum(len(f) for _d, _s, f in os.walk(os.path.join(tgt, "drivers")))
-            self.assertGreaterEqual(n_know, 10, "knowledge/ 没进包")
-            self.assertGreaterEqual(n_drv, 40, "drivers/ 没进包")
+    def test_knowledge_from_sdist(self):
+        """★ 2026-10-13 新增：从 **sdist** 安装跑探针（分发路径②，空壳传染路径）。
 
-            probe = os.path.join(tgt, "_smoke_probe.py")
-            with open(probe, "w", encoding="utf-8") as fh:
-                fh.write(_PROBE_SRC.format(tgt=tgt, root=ROOT))
-            r2 = subprocess.run([sys.executable, probe], cwd=tgt,
-                                capture_output=True, text=True,
-                                encoding="utf-8", errors="replace")
-            self.assertEqual(r2.returncode, 0, "装出来的包跑不起来：%s" % r2.stderr[-500:])
-            data = json.loads(r2.stdout.strip().splitlines()[-1])
-
-            self.assertTrue(data["core_from_target"],
-                            "import 到的不是装出来的包（测试写错了，等于没测）：%s" % data["core_file"])
-            self.assertGreaterEqual(data["pinmaps"], 3, "装出来后引脚库为空")
-            self.assertGreaterEqual(data["boards"], 3, "装出来后板级库为空")
-            self.assertGreaterEqual(data["drivers"], 9, "装出来后驱动库为空")
-            self.assertGreaterEqual(data["errcode_tables"], 6, "装出来后错误码表为空")
-            self.assertGreaterEqual(data["fault_bits"], 1, "装出来后故障位域表为空")
-            self.assertGreaterEqual(data["extra_rules"], 10, "装出来后外置规则没加载")
-            self.assertTrue(data["driver_get_real"], "driver_get 读不到真内容")
-            self.assertTrue(data["errcode_real"], "error_code_lookup 说知识库为空")
-
-            # 隔离层必须随包分发且默认锁着写 —— 否则 pip 装的版本是「裸奔」的，
-            # 用户以为有防护，实际任何一次调用都能直接动他的设备。
-            self.assertEqual(data["guard_default_mode"], "readonly",
-                             "装出来的包默认档位不是 readonly：%s" % data["guard_default_mode"])
-            self.assertTrue(data["guard_blocks_write"],
-                            "装出来的包里隔离层没拦住写操作（闸门没随包生效）")
-        finally:
-            shutil.rmtree(tgt, ignore_errors=True)
+        审查报告 P0-1 的实测复现：MANIFEST.in 缺失时 sdist 不含数据目录，
+        而标准 `python -m build` 的 wheel 是从 sdist 解包构建的 —— 空壳传染。
+        只有这条测试能在发版前抓住它。
+        """
+        data = self._install_and_probe(self.sdist_path, "sdist")
+        self._assert_probe(data, "sdist")
 
 
 #: 冒烟探针：**必须**先剔掉仓库根，否则 import 的是原地源码

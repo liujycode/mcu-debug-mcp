@@ -25,6 +25,81 @@
 
 ---
 
+## [4.5.1] - 2026-10-13
+
+**审查报告（`docs/AUDIT-2026-10-13.md`）6 个 P0 全部清零 + B 档上线质量收口。
+本轮无接口变更（`report_session` 新增 `confirm=False` 参数为向后兼容的可选门禁）。**
+
+### Fixed（P0：上线阻断项）
+- **发布产物空壳（最严重）**：缺 `MANIFEST.in` → sdist 不含 knowledge/drivers → wheel 从 sdist
+  解包构建 → 空壳传染，用户 pip install 后知识类工具全空。新增 `MANIFEST.in`
+  （recursive-include 数据目录 + prune 构建产物）；`setup.py` 数据目录缺失由静默 `continue`
+  改 `raise SystemExit`。实测 sdist 139 条 / wheel 81 条（修复前均为 0）。
+- **打包冒烟测试假绿灯**：旧测试用 `pip install . --target`（源码树直构）绕开 sdist，永远绿。
+  改参数化双安装源：`setUpClass` 真构建 sdist+wheel，`_install_and_probe` 对两种产物跑
+  同一套 11 项探针断言（10 passed）。
+- **`flash_verify` 回读失败仍打印"✓ 完全一致"**：三条失败分支（回读失败/临时文件读不到/
+  长度不符）只累加 `bad_total` 不改判据 → 探针掉线也报"固件已正确烧入"。加 `seg_ok`
+  标记，结论段区分"✓ 完全一致 / ？ 未能校验 / ✗ 不一致"。
+- **知识库事实错误**：`cme.json` 把 CME ERROR 12 释义为"SIM 的 PIN 码错误"（3GPP TS 27.007
+  §9.2.1 实为 **SIM PUK required**，Pin 错误是 11，incorrect password 是 16）——会误导用户
+  继续试 PIN 把 SIM 彻底锁死。12 改为 PUK 释义 + 警告，补录 14/15/16；
+  `analyzer._CME_FALLBACK` 同步 8 条同文（靠对饮测试保证不脱节）。
+- **审计体系三处失明**：`audit_constants` 补三条句式正则（当场抓到藏起来的第 4 处旧数字）；
+  `eco_frameworks` 探针硬编码 `manual now=1` 改实测（6/6，N-09 缺口关闭）；
+  `docNumbers` 改 `finditer` 全量匹配（抓到 README:37 旧值）。
+- **文档数字矛盾**：README/PLAN/ROADMAP 全量对齐；删 PLAN 里 HardFault"仍未真机"过期结论
+  （与 ROADMAP 的 9/9 PASS 打架）；修 PLAN:59 算术错误。
+
+### Fixed（代码正确性，13 条）
+- `chip_info` FlashSize 短文件 IndexError；`baudrate_autodetect` 单候选 IndexError；
+  `symbol_lookup` 空符号表 IndexError；`error_code_lookup` 空表/None 键 KeyError
+  （与同文件既有保护口径拉齐）。
+- `serial_read`/`serial_send` 串口异常未捕获 → 设备被拔时抛栈给 MCP 客户端；改为返回
+  可读中文排查提示（已收字节照常给）。
+- `serial_pair_record` 第二个口打不开时第一个口句柄泄漏 → 两个口分两个 try，先关先开的。
+- `decode_register` 字段级 `bit/lsb/width` 无校验（负 width 抛 `negative shift count`）→
+  加值域校验，非法字段走 skipped 汇总不再冒泡。
+- `report_session` 完全不过 guard 闸门（`overwrite=True` 可覆盖主机任意路径）→ 纳入 write
+  档 + 覆盖需 overwrite+confirm 双闸门；`stream_capture` 从复用只读 op 改登记 write op。
+- `guard.py` 虚拟口豁免排在写档/不可逆 confirm 之前（`loop://` 可跳过二次确认）→
+  豁免只免档位/名单，不可逆 confirm 保留。
+- `_at_line_match` / `_bridge_lines` 把未收完的半行当整行匹配 → 半包假 PASS、失步检测
+  形同虚设；改为只认被 `\n` 终结的行。
+- `_sp_vals_from` 遇任意 `Error:` 行丢弃全部已读值 → 改为保留已读值再 break。
+
+### Fixed（误报与断言强度）
+- `analyzer` SENSOR_FF 缺语义守卫：实测 `BSSID strength 255 255 255`（WiFi 信号强度日志）
+- 被误判"数据线悬空"。加两路判据（行尾单值+读数类键名+负向前瞻排除强度/计数词；
+  连续多字节 0xFF dump 形态），五形态实测全对。
+- `test_analyzer.py` 断言 `assertGreaterEqual(len(_EXTRA_RULES), 8)` → `assertEqual(..., 15)`
+  （旧断言下规则被误删 7 条仍绿）。
+
+### Added
+- `tools/mutation_check.py`：变异验证——把四个修复处的 bug 种回去，对饮测试必须变红，
+  还原后 md5 字节级一致（判别力证明）。本轮它自己也抓出一个 bug：文本模式读写被
+  Windows 换行符转换坑害，已修成二进制读写。
+- `tools/verify_stdio.py`：真 MCP stdio 客户端端到端（initialize → 55 工具 → 13 资源
+  全读 → 6 prompts → env_status 实调），v4.3 时代后首次重测全过。
+- `MANIFEST.in`（发布数据清单）；`pyproject.toml` 补 `[project.urls]`；
+  `SECURITY.md` 补漏洞报告通道（GitHub Private Vulnerability Report）。
+- 审计新增 `pytest_collected` 探针：真跑 `--collect-only` 数收集项，README 的测试总数
+  （706 项）由机器锁定，手改数字审计立即红（种回旧值 699 已验证有牙）。
+
+### Changed
+- `pyproject.toml` 依赖下界 `mcp>=1.0` → `mcp>=1.2.0`（与 requirements.txt 对齐）。
+- 三个真机脚本去硬编码：`build.py`/`live_check.py`/`fault_live.py` 的 GCC/CMSIS/
+  CubeProgrammer 路径改 env>PATH>glob 自动定位（含 msys64/CubeIDE 候选），找不到给
+  可读诊断；`live_check.py` 默认备份路径改 `%TEMP%`，且**烧录前自动上传备份**
+  （备份失败不烧）。
+- 文档测试计数 699 → 706 项 / 704 passed（旧数字是手写的，必然过期）。
+
+### Security
+- `report_session` 纳入隔离闸门：未经 overwrite+confirm 双确认不得覆盖既有文件；
+  `stream_capture` 登记为 write 档操作（长期独占端口不再借用只读 op 过闸）。
+
+---
+
 ## [4.5.0] - 2026-09-22
 
 **G06 总线工具落地：8 个工具 + MCUDBG/1 桥固件——「AI 替你看总线上挂了什么」从

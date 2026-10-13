@@ -34,7 +34,7 @@ MCU_DEBUG_MCP_NO_TOUCH_DTR=1          # 打开端口时不翻转 DTR/RTS，尽�
 | 串口读写 | ✅（普遍更全） | ✅ expect 模式等待响应 |
 | 日志分析 | ❌ 把原始日志丢给 LLM 现看 | ✅ **45 条模式库**（30 内置 + 15 外置），规则出厂预置+带排查步骤 |
 | 烧录失败诊断 | ❌ | ✅ ST-Link 连接失败/Keil 找不到算法/esptool 进不了下载模式/RDP 读保护…8 条规则族 |
-| 错误码查询 | ❌ | ✅ **error_code_lookup**：ESP-IDF esp_err_t / ESP-AT 通用响应 / CWJAP / CME / PubSubClient rc / Modbus 异常码，共 6 张表 48 条，**每条带出处**；未收录明说查不到 |
+| 错误码查询 | ❌ | ✅ **error_code_lookup**：ESP-IDF esp_err_t / ESP-AT 通用响应 / CWJAP / CME / PubSubClient rc / Modbus 异常码，共 6 张表 51 条，**每条带出处**；未收录明说查不到 |
 | 编译/链接报错解析 | ❌ | ✅ gcc / Keil / armcc / MSVC 四种风格 |
 | 引脚冲突检测 | ❌ | ✅ pin_check **三引擎**：F1 固定复用 / F4 AF 表 / ESP32 io_mux 硬约束，可交叉板载外设 |
 | 板级知识库 | ❌ | ✅ board_get：板载外设占用+坑清单按翻车率排序+供电说明（蓝药丸/黑药丸已收录） |
@@ -143,7 +143,7 @@ RTOS/系统层（4）：RTOS_ASSERT 断言 · RTOS_STACK_OVF 栈溢出 · HAL_AS
 
 开发期报错（3）：COMPILE_UNDEF 链接未定义符号 · COMPILE_SYNTAX 编译错误（gcc/Keil/armcc/MSVC）· SD_INIT_FAIL
 
-**外置 14 条（knowledge/fault_patterns.json，社区可贡献）**：
+**外置 15 条（knowledge/fault_patterns.json，社区可贡献）**：
 
 - 烧录失败族（8）：STLINK_CONNECT_FAIL · KEIL_NO_ALGO 找不到 Flash 算法 · KEIL_FLASH_DL_FAIL 下载失败 · OPENOCD_TARGET_FAIL · ESPTOOL_FAIL 进不了下载模式 · PYOCD_PROBE_FAIL · FLASH_READOUT_PROTECT 读保护激活 · SWD_COMM_FAIL 调试中失联
 - 总线/网络族（6，v4 新增）：CAN_BUS_OFF（bus-off/error passive，终端电阻 60Ω/ACK 原理）· WIFI_RECONNECT_STORM（断连 ≥3 次计数门槛，供电头号原因）· BLE_CONN_LOST（连接参数/MTU/断开原因码 0x08/0x13）· JLINK_FAIL（克隆许可/DLL 冲突）· DNS_FAIL（DNS 配置/内网域名）· USB_ENUM_FAIL（DP 1.5kΩ 上拉/48MHz 晶振/R10）
@@ -170,6 +170,9 @@ pip install esptool             # 可选：ESP 烧录
 
 # 方式二：pip 安装（本目录）
 pip install .[all]
+
+# 方式三：装完后用 console script 起服务（等价于 python server.py）
+mcu-debug-mcp
 ```
 
 ## 客户端配置
@@ -188,20 +191,20 @@ pip install .[all]
 
 **Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式。
 
-## 验证状态（2026-09-21，v4.3）
+## 验证状态（2026-10-13 复验，v4.5.1）
 
 | 模块 | 验证方式 | 状态 |
 |------|----------|------|
-| analyzer 异常模式库（30 内置 + 14 外置） | tests/test_analyzer.py：99 项断言（正例命中+计数门槛+不误报+永不抛异常） | ✅ 本机实测通过 |
+| analyzer 异常模式库（30 内置 + 15 外置） | tests/test_analyzer.py：99 项断言（正例命中+计数门槛+不误报+永不抛异常） | ✅ 本机实测通过 |
 | 驱动纯函数算法（9 款驱动全量） | tests/test_driver_logic_py.py：49 项断言（与 C 实现同源对拍） | ✅ 本机实测通过 |
 | **9 款 C 驱动编译 + 逻辑测试** | tests/run_c_tests.py（gcc 16.2.0 mingw64）：**107 checks, 0 failed，9 款全部 -Wall -Wextra 零警告** | ✅ 本机实测通过 |
 | **串口读写 + expect/idle_ms（loop:// 回环）** | tests/test_serial_tools.py TestSerialLoop：全过 0 skip（Python 3.12 + pyserial 3.5） | ✅ 本机实测通过 |
 | modbus/pin_check 三引擎/boards/sessions/RTT 降级 | tests/test_serial_tools.py | ✅ 本机实测通过 |
 | **知识库数据核验** | tests/validate_knowledge.py（引脚数/唯一性/fixed_mux 功能全局唯一/SWD 一致性/onboard pin 字段/正则可编译/**条目级 source 强制**） | ✅ 0 错误（曾抓出 3 处 F103 录入错误） |
-| **知识库条目级溯源** | 11 个知识文件 **193 条**数据全部带条目级 source；校验器强制（注入缺 source 必报错），并有测试保证注入后文件**逐字复原**（防止测试改写手写排版） | ✅ 本机实测通过 |
-| server.py MCP 注册层（35 工具 + 11 resources + 6 prompts） | **真 MCP 客户端 stdio 握手实测**：`list_tools()`=35 · 静态 resources=5 · 模板 resources=6 | ✅ 本机实测通过 |
-| **MCP 协议层 + 资源层真机** | **11 个资源全部 `read_resource` 可读**（6 个模板资源 driver/wiring/pinmap/board/errcode/faultbits 逐项实测，9 款驱动逐个读）；查不存在的名字一律友好拒绝并列出可选项、不抛异常；`tests/test_mcp_resources.py` 17 条把资源清单精确锁死 | ✅ 本机实测通过 |
-| **离线全量（Python 全套 509 项）** | `python -m pytest tests -q`：**509 passed, 2 skipped**（两个 skip 都需显式授权：真机 USB CDC 用例，以及「该口不是 USB CDC」的对照用例） | ✅ 本机实测通过 |
+| **知识库条目级溯源** | 15 个知识文件 **250 条**数据全部带条目级 source；校验器强制（注入缺 source 必报错），并有测试保证注入后文件**逐字复原**（防止测试改写手写排版） | ✅ 本机实测通过 |
+| server.py MCP 注册层（55 工具 + 13 resources + 6 prompts） | **真 MCP 客户端 stdio 握手实测**：`list_tools()`=55 · 静态 resources=6 · 模板 resources=7 | ✅ 本机实测通过 |
+| **MCP 协议层 + 资源层真机** | **13 个资源全部 `read_resource` 可读**（7 个模板资源 driver/wiring/pinmap/board/ecosystem/errcode/faultbits 逐项实测，9 款驱动逐个读）；查不存在的名字一律友好拒绝并列出可选项、不抛异常；`tests/test_mcp_resources.py` 17 条把资源清单精确锁死 | ✅ 本机实测通过 |
+| **离线全量（Python 全套 706 项）** | `python -m pytest tests -q`：**704 passed, 2 skipped**（两个 skip 都需显式授权：真机 USB CDC 用例，以及「该口不是 USB CDC」的对照用例；收集总数由 `tests/audit_capability.py` 的 `pytest_collected` 探针机器锁定，手改数字会被审计抓出） | ✅ 本机实测通过 |
 | **隔离与安全（37 条）** | `tests/test_isolation.py`：档位/名单/不可逆确认/虚拟端口豁免/未登记操作 fail-closed，**含必须放行的反例**（离线打分、dry-run 预览、`loop://`）；另有静态对账与注入法反自证；并列 6 条守着`tools/live_acceptance.py`夹具自身（无端口拒跑、dry-run 不开口、DENY 不得设 `*`、收尾不得假 PASS、破坏关必须单独授权） | ✅ 本机实测通过 |
 | **排故链四工具（fault/map/符号/栈）** | tests/test_fault_chain.py：**67 项断言**，其中 30+ 条是「必须拒绝给结论」的假答案防线；**从零删掉 build_tmp 也能自举**（setUpModule 现场 gcc 生成夹具） | ✅ 本机实测通过 |
 | **真机验收夹具（N-15）** | `tools/live_acceptance.py` 在 **NUCLEO-H563ZI（STM32H563/Cortex-M33，板载 ST-Link V3EC 虚拟串口 COM21）** 上实跑：**PASS 16 · FAIL 0 · SKIP 1**；可反复跑不打死板子；破坏关单独授权后 **3/3 PASS** | ✅ 真机实测通过 |
@@ -289,7 +292,7 @@ pip install .[all]
 
 ```
 mcu-debug-mcp/
-├── server.py           # MCP 薄壳（FastMCP 注册 35 工具 + 11 resources + 6 prompts）
+├── server.py           # MCP 薄壳（FastMCP 注册 55 工具 + 13 resources + 6 prompts）
 ├── core.py             # 全部工具实现（零框架依赖，可独立测试）
 ├── analyzer.py         # 故障模式引擎（30 内置规则 + JSON 外置规则加载 + min_count 计数门槛）
 ├── guard.py            # 运行时隔离层（默认禁写硬件 + 端口名单 + 不可逆操作二次确认）
@@ -297,7 +300,7 @@ mcu-debug-mcp/
 ├── setup.py            # 打包钩子（整目录带上 knowledge/ 与 drivers/）
 ├── coverage.json       # 能力面清单（26 缺口 + 27 能力轴，审计脚本据此对账）
 ├── SECURITY.md         # 安全与隔离模型 + 破坏性操作矩阵
-├── pyproject.toml      # pip/uvx 可安装（v4.2.0）
+├── pyproject.toml      # pip/uvx 可安装（v4.5.1）
 ├── tools/              # live_acceptance.py：真机验收夹具（默认只读，需 --allow-write 才发字节）
 ├── requirements.txt
 ├── knowledge/          # 领域知识库（JSON 外置，社区可贡献）

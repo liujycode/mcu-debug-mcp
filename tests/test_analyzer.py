@@ -103,6 +103,22 @@ class TestSensorFF(unittest.TestCase):
         log = "value: 255\r\nvalue: 3\r\nvalue: 1024\r\n"
         self.assertNotIn("SENSOR_FF", hit_ids(analyze_log(log)))
 
+    def test_wifi_strength_not_misjudged(self):
+        """★ 2026-10-13 反例：WiFi 信号强度不是「数据线悬空」。
+
+        实测误报形态 `BSSID strength 255 255 255`——旧版裸数字匹配凑够 3 个
+        255 就报 SENSOR_FF，让用户查杜邦线，真问题却是信号弱。判据已收紧为
+        「行尾单值 + 读数类键名 + 非强度/计数语义」或「连续多字节 0xFF dump」。
+        """
+        log = ("BSSID strength 255 255 255\r\nBSSID strength 254 254 254\r\n"
+               "BSSID strength 255 255 255\r\n")
+        self.assertNotIn("SENSOR_FF", hit_ids(analyze_log(log)))
+
+    def test_rssi_dbm_not_misjudged(self):
+        """同型反例：rssi: -1 是信号强度错误码，不是传感器数据线悬空。"""
+        log = "rssi: -1\r\nrssi: -1\r\nrssi: -1\r\n"
+        self.assertNotIn("SENSOR_FF", hit_ids(analyze_log(log)))
+
 
 class TestDS18B20_85(unittest.TestCase):
     def test_85_hit(self):
@@ -363,8 +379,11 @@ class TestEdgeCases(unittest.TestCase):
 
 class TestPatternRules(unittest.TestCase):
     def test_loaded_from_json(self):
-        # 8 条烧录失败规则从 JSON 加载，总量 = 内置 + 外置
-        self.assertGreaterEqual(len(_EXTRA_RULES), 8)
+        # 2026-10-13：>=8 太松——规则被误删 7 条测试仍绿。实测 15 条，钉死等值。
+        # （fault_patterns.json 现有 15 条；加规则时这里会红，提醒同步改文案）
+        self.assertEqual(len(_EXTRA_RULES), 15,
+                         "fault_patterns.json 的实加载数变了：更新本断言，"
+                         "并同步 README/PLAN 里的外置规则条数（audit_constants 会查）")
         self.assertGreaterEqual(rule_count(), 38)
 
     def test_source_annotated(self):

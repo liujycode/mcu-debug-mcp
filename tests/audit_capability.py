@@ -36,6 +36,7 @@ import ast
 import json
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -171,6 +172,33 @@ def _guard_op_count():
     return sum(1 for spec in guard.OPS.values() if all(k in spec for k in need))
 
 
+_PYTEST_COLLECTED = None
+
+
+def _pytest_collected():
+    """真跑 `pytest --collect-only` 数收集项（含 parametrize 展开后的每一项）。
+
+    ★ 为什么不用 AST 静态数：parametrize 一个函数展开成多项，静态数必然对不上；
+      为什么不做全量执行：审计跑全量 pytest 会递归触发「测审计器的测试」，
+      且 CI 里 pytest 已有独立门禁，这里只对「文档声明的总数」负责。
+    ★ 2026-10-13 新增的教训：README 手写「699 passed」而实测 704——手写数字
+      必然过期，从此文档里的测试总数由本探针机器锁定。
+    """
+    global _PYTEST_COLLECTED
+    if _PYTEST_COLLECTED is None:
+        try:
+            r = subprocess.run(
+                [sys.executable, "-m", "pytest", "--collect-only", "-q",
+                 "--no-header", "-p", "no:cacheprovider"],
+                cwd=ROOT, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=600)
+            m = re.search(r"(\d+)\s+tests?\s+collected", r.stdout or "")
+            _PYTEST_COLLECTED = int(m.group(1)) if m else -1
+        except Exception:
+            _PYTEST_COLLECTED = -1
+    return _PYTEST_COLLECTED
+
+
 def eval_probe(probe, ctx):
     kind = probe.get("kind")
     if kind == "core_len":
@@ -203,6 +231,8 @@ def eval_probe(probe, ctx):
         return _guard_op_count()
     if kind == "tools_with_assertions":
         return ctx["depth"]["with_assertions"]
+    if kind == "pytest_collected":
+        return _pytest_collected()
     if kind == "manual":
         return probe.get("now", 0)
     return 0
@@ -448,6 +478,9 @@ def run_audit():
     # 文档对账用的 metric 表
     objs = {a["id"]: a["now"] for a in axes}
     metrics = dict(objs)
+    # 测试总数不占能力轴（它不是"能力"，是回归面规模），但要对账：
+    # 直接注入 metric，docNumbers 里用 pytest_collected 引用。
+    metrics["pytest_collected"] = _pytest_collected()
 
     mismatches = []
     for dn in coverage.get("docNumbers", []):
@@ -456,21 +489,28 @@ def run_audit():
             mismatches.append({"label": dn["label"], "detail": "文件不存在：%s" % dn["file"]})
             continue
         src = open(p, encoding="utf-8").read()
-        m = re.search(dn["regex"], src)
-        if not m:
+        group = dn.get("group", 1)
+        # ★ 2026-10-13：re.search 只取**首个**匹配 —— README 前半已更新、
+        #   后半还留着旧数字时，首匹配命中新值，旧值全部落在盲区
+        #   （实测：README:50 写 55 而 :202/:292 还是 35，审计报 OK）。
+        #   改 finditer 全量：每一处声明都必须对上。
+        hits = list(re.finditer(dn["regex"], src))
+        if not hits:
             mismatches.append({"label": dn["label"],
                                "detail": "文档里没找到该声明（正则未命中）：%s" % dn["regex"]})
             continue
-        group = dn.get("group", 1)
-        got = int(m.group(group))
         want = metrics.get(dn["metric"])
         if want is None:
             mismatches.append({"label": dn["label"], "detail": "清单里没有 metric %s" % dn["metric"]})
-        elif got != want:
-            mismatches.append({
-                "label": dn["label"],
-                "detail": "%s 写 %d，实测 %d" % (dn["file"], got, want),
-            })
+            continue
+        for m in hits:
+            got = int(m.group(group))
+            if got != want:
+                line = src[:m.start()].count("\n") + 1
+                mismatches.append({
+                    "label": dn["label"],
+                    "detail": "%s:%d 写 %d，实测 %d" % (dn["file"], line, got, want),
+                })
 
     dead = dead_code()
     for d in dead:

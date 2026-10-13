@@ -30,10 +30,44 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓库根（含 core.py）
 sys.path.insert(0, ROOT)
 
-EXE = (r"C:\Users\ljyit\AppData\Local\stm32cube\bundles\programmer"
-       r"\2.21.0\bin\STM32_Programmer_CLI.exe")
 
-DEFAULT_BACKUP = r"D:\work\_tmp\h563_probe_fw\orig_sector0.bin"
+def _find_cube_prog():
+    """定位 STM32_Programmer_CLI：环境变量 > PATH > 常见安装位置 glob。
+
+    2026-10-13 去硬编码：此前钉死某台机器的一个版本目录，别人拿到仓库
+    必然跑不通。找不到时给可读诊断，不静默用一个不存在的路径。
+    """
+    import glob
+    env = os.environ.get("MCUDBG_CUBE_PROG")
+    if env:
+        if os.path.exists(env):
+            return env
+        sys.stderr.write("!! MCUDBG_CUBE_PROG=%s 不存在\n" % env)
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if d and os.path.exists(os.path.join(d, "STM32_Programmer_CLI.exe")):
+            return os.path.join(d, "STM32_Programmer_CLI.exe")
+    local = os.environ.get("LOCALAPPDATA") or ""
+    cands = []
+    if local:
+        cands += glob.glob(os.path.join(
+            local, "stm32cube", "bundles", "programmer", "*", "bin",
+            "STM32_Programmer_CLI.exe"))
+    for root in ("C:/Program Files/STMicroelectronics",
+                 "C:/Program Files (x86)/STMicroelectronics"):
+        cands += glob.glob(os.path.join(
+            root, "*", "*", "bin", "STM32_Programmer_CLI.exe"))
+    for c in cands:
+        if os.path.exists(c):
+            return c
+    return None
+
+
+EXE = _find_cube_prog()
+# 备份默认落在系统临时目录（不写死某台机器的盘符路径）；
+# 恢复原固件用的是这个备份，烧录**之前**就会校验它存在且是 8192 字节整扇区。
+DEFAULT_BACKUP = os.path.join(
+    os.environ.get("TEMP") or os.environ.get("TMP") or ".",
+    "mcudbg_orig_sector0.bin")
 
 log_lines = []
 
@@ -71,6 +105,14 @@ def main():
                     help="验证完不恢复原固件（桥固件留在板上）")
     args = ap.parse_args()
 
+    if not EXE:
+        log("找不到 STM32_Programmer_CLI，无法烧录/备份，终止（板子未被改动）。")
+        log("设环境变量 MCUDBG_CUBE_PROG 指向它，例如：")
+        log("  set MCUDBG_CUBE_PROG=%LOCALAPPDATA%\\stm32cube\\bundles\\"
+            "programmer\\<版本>\\bin\\STM32_Programmer_CLI.exe")
+        log("或安装 STM32CubeProgrammer（默认就落在上面这个 glob 路径）。")
+        return 1
+
     fw_bin = os.path.join(HERE, "fw.bin")
 
     # ---------- 1) 编译 ----------
@@ -90,7 +132,31 @@ def main():
         log("★ 超过扇区 0（8KB），会越界覆盖别的内容 —— 终止，板子没被动过")
         return 1
 
-    # ---------- 2) 烧录 ----------
+    # ---------- 2) 备份原固件（必须在烧录之前） ----------
+    if not args.no_restore:
+        ok_backup = (os.path.exists(args.backup)
+                     and os.path.getsize(args.backup) == 8192)
+        if ok_backup:
+            log("【2】原固件备份已在（%s，8192 字节整扇区）" % args.backup)
+        else:
+            # 2026-10-13：旧版没有这一步——备份靠外部手动准备，默认路径不存在时
+            # 烧完才在恢复阶段报错（板子已经是桥固件，原固件没了）。
+            # 现在烧录前先 upload 原扇区 0，备不成就不烧。
+            log("【2】先 upload 原扇区 0 → %s（烧录前做；备不好就不烧）" % args.backup)
+            d = os.path.dirname(os.path.abspath(args.backup))
+            if d:
+                os.makedirs(d, exist_ok=True)
+            rc, _ = sh(["-c", "port=SWD", "mode=hotplug", "mode=normal",
+                        "-u", "0x08000000", "8192", args.backup])
+            if rc != 0 or not os.path.exists(args.backup) \
+                    or os.path.getsize(args.backup) != 8192:
+                log("★ 原固件备份失败（rc=%s）——没有备份就不烧录，终止。"
+                    "板子未被改动。" % rc)
+                log("  排查：ST-Link 是否连上（CLI -l 看枚举）、板子是否上电。")
+                return 1
+            log("  备份完成（md5=%s）" % md5(args.backup))
+
+    # ---------- 3) 烧录 ----------
     log("")
     log("【2】烧录桥固件到 0x08000000")
     rc, _ = sh(["-c", "port=SWD", "mode=hotplug", "mode=normal",

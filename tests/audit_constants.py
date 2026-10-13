@@ -217,12 +217,52 @@ def check_hardcoded_rule_counts():
     return issues
 
 
+# --------------------------------------------------------------------------
+# 6) 「外置 N 条」句式：N 必须等于 analyzer._EXTRA_RULES 的实加载数
+#
+# 与 5 同型，但比的是**外置**子集（fault_patterns.json 的规则数），
+# 不是总数 45。2026-10-13 实测命中：README:146 写「外置 14 条」而
+# fault_patterns.json 实际 15 条 —— 上面 4 条总数正则都要求数字后紧跟
+# 「模式库/规则」，「外置 14 条」这种拆分句式全部落空，审计报 OK。
+# 本检查专收这种句式。
+# --------------------------------------------------------------------------
+_EXTRA_COUNT_PATTERNS = (
+    r"外置\s*(\d+)\s*条",
+    r"(\d+)\s*条外置",
+    r"[+＋]\s*(\d+)\s*外置",
+)
+
+
+def check_extra_rule_counts():
+    issues = []
+    want = len(getattr(analyzer, "_EXTRA_RULES", []))
+    if want == 0:
+        issues.append("analyzer._EXTRA_RULES 是空的（外置规则没加载？）——审计器需先确认真伪")
+        return issues
+    for rel in _RULE_COUNT_SOURCES:
+        path = os.path.join(ROOT, rel)
+        if not os.path.exists(path):
+            continue
+        with open(path, "r", encoding="utf-8") as f:
+            src = f.read()
+        for pat in _EXTRA_COUNT_PATTERNS:
+            for m in re.finditer(pat, src):
+                got = int(m.group(1))
+                if got != want:
+                    line = src[:m.start()].count("\n") + 1
+                    issues.append("%s:%d 写「%s」，实测外置规则 %d 条 —— "
+                                  "加外置规则时漏改这处文案"
+                                  % (rel, line, m.group(0), want))
+    return issues
+
+
 CHECKS = [
     ("USB VID:PID 三处定义", check_usb_vidpid),
     ("错误码表 fallback↔知识库", check_error_codes),
     ("HardFault 位 规则↔知识库", check_fault_bits),
     ("外置规则条数", check_rule_counts),
     ("文案里的规则条数", check_hardcoded_rule_counts),
+    ("文案里的外置规则条数", check_extra_rule_counts),
 ]
 
 

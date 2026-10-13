@@ -60,9 +60,30 @@ SCB = {"CFSR": 0xE000ED28, "HFSR": 0xE000ED2C, "MMFAR": 0xE000ED34, "BFAR": 0xE0
 SRAM_LO, SRAM_HI = 0x20000000, 0x200A0000
 MAGIC = 0x5A5A5A5A
 
-STM32_CLI = os.path.join(
-    os.environ.get("LOCALAPPDATA", ""),
-    r"stm32cube\bundles\programmer\2.21.0\bin\STM32_Programmer_CLI.exe")
+def _find_cube_prog():
+    """定位 STM32_Programmer_CLI：环境变量 > PATH > 常见安装位置 glob。
+
+    2026-10-13 去硬编码：此前钉死 `programmer\\2.21.0` 一个版本目录，
+    换个 CubeProgrammer 版本就跑不通。找不到时由调用方给可读诊断。
+    """
+    import glob
+    env = os.environ.get("MCUDBG_CUBE_PROG")
+    if env:
+        return env if os.path.exists(env) else None
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if d and os.path.exists(os.path.join(d, "STM32_Programmer_CLI.exe")):
+            return os.path.join(d, "STM32_Programmer_CLI.exe")
+    local = os.environ.get("LOCALAPPDATA") or ""
+    if local:
+        for c in glob.glob(os.path.join(
+                local, "stm32cube", "bundles", "programmer", "*", "bin",
+                "STM32_Programmer_CLI.exe")):
+            if os.path.exists(c):
+                return c
+    return None
+
+
+STM32_CLI = _find_cube_prog()
 
 
 def hr(t):
@@ -214,8 +235,11 @@ def main(argv=None):
         print("  要真跑：python tools/fault_live.py --flash")
         return 0
 
-    if not os.path.isfile(STM32_CLI):
+    if not STM32_CLI or not os.path.isfile(STM32_CLI):
         print("\n!! 找不到 STM32_Programmer_CLI，无法烧录")
+        print("  设环境变量 MCUDBG_CUBE_PROG 指向它（任意版本），例如：")
+        print("    set MCUDBG_CUBE_PROG=%LOCALAPPDATA%\\stm32cube\\bundles\\"
+              "programmer\\<版本>\\bin\\STM32_Programmer_CLI.exe")
         return 2
 
     ok, bad = flash_and_capture(args.sn)

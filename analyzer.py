@@ -19,7 +19,7 @@ import sys
 
 # 数据根定位：与 core.py 共用唯一口径（$MCU_DEBUG_MCP_HOME > ~/.mcu-debug-mcp > 包目录）。
 # 历史坑：这里曾用 dirname(__file__)/knowledge —— pip 装出来的包里没有该目录，
-# 于是 14 条外置规则与 4 张码表**静默**失效（静默回退到内置 fallback，不报错）。
+# 于是外置规则与错误码表**静默**失效（静默回退到内置 fallback，不报错）。
 _SYS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SYS_DIR not in sys.path:
     sys.path.insert(0, _SYS_DIR)
@@ -210,8 +210,30 @@ def _det_sensor_zero(text):
 
 
 def _det_sensor_ff(text):
-    """全 0xFF / 65535 / -1：数据线悬空/上拉缺失/MISO 断开/读到了未初始化 flash。"""
-    hits = re.findall(r"(?im)\b(?:255|65535|-1|0xFF(?:\s*[, ]\s*0xFF)+|FF[ ]+FF[ ]+FF)\b", text)
+    """全 0xFF / 65535 / -1：数据线悬空/上拉缺失/MISO 断开/读到了未初始化 flash。
+
+    ★ 2026-10-13 加语义守卫（同 SENSOR_ZERO 的范式）：旧版裸数字匹配，
+      实测 `BSSID strength 255 255 255`（WiFi 信号强度日志）会凑够 3 个
+      255 被误判「数据线悬空」——让用户去查杜邦线，而真问题是信号弱。
+      现在两条路才认：
+        ① 行尾即单个 255/65535/-1/0xFF，且键名是读数类（传感器词或
+           value/data/raw/reg 这类通用读数键）、不是强度/计数类
+           （strength/rssi/snr/count/queue/level/dropped…）——「key: 值」
+           的传感器日志形态；WiFi 强度行内多值且带 strength，被排除
+        ② 连续多字节 0xFF 的 dump 形态（寄存器/数据 dump 本身就是
+           "读到的原始字节"，无需语义词；但 `255 255 255` 这类十进制
+           强度值不算 dump 形态）
+    """
+    wordy = re.findall(
+        r"(?im)^(?![^\n]*(?:strength|rssi|snr|signal|count|queue|level|dropped"
+        r"|retry|loss|free|used|remain|pending|miss|fail))"
+        r"[^\n\d-]*(?:" + _SENSOR_WORD +
+        r"|value|val|data|raw|reg|read)[^\n\d-]*"
+        r"[:=]\s*(?:255|65535|-1|0[xX][fF]{1,2})\s*$", text)
+    dumps = re.findall(
+        r"(?im)(?:0[xX][fF]{2}(?:\s*[, ]\s*0[xX][fF]{2}){2,}"
+        r"|\b[fF]{2}(?:[ ]+[fF]{2}){2,}\b)", text)
+    hits = wordy + dumps
     if len(hits) >= 3:
         return hits[:5]
     return []
@@ -321,8 +343,14 @@ _CWJAP_CODES = _load_code_table("cwjap.json", "+CWJAP:%s", _CWJAP_FALLBACK)
 # fallback 提成命名常量：与 _CWJAP_FALLBACK / core._MODBUS_EXC_FALLBACK 结构统一，
 # 并可被 tests/audit_constants.py 机器校验「fallback 是否与知识库同步」。
 _CME_FALLBACK = {
-    "3": "操作不允许", "10": "SIM 未插入", "11": "SIM 需要 PIN 码",
-    "12": "SIM 的 PIN 码错误", "13": "SIM 故障",
+    "3": "operation not allowed（操作不允许）",
+    "10": "SIM not inserted（SIM 未插入）",
+    "11": "SIM PIN required（需要 PIN 码解锁）",
+    "12": "SIM PUK required（PIN 已锁死，需 PUK 解锁）",
+    "13": "SIM failure（SIM 故障）",
+    "14": "SIM busy（SIM 正忙）",
+    "15": "SIM wrong（SIM 不识别/不匹配）",
+    "16": "incorrect password（密码错误，含 PIN/PIN2/PUK 尝试失败）",
 }
 _CME_CODES = _load_code_table("cme.json", "+CME ERROR:%s", _CME_FALLBACK)
 

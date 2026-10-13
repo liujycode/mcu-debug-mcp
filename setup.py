@@ -39,7 +39,16 @@ class build_py(_build_py):
         for name in DATA_DIRS:
             src = os.path.join(HERE, name)
             if not os.path.isdir(src):
-                continue
+                # 2026-10-13：这里原来是 continue —— 数据目录缺失时静默跳过，
+                # 产物照样构建成功，用户装到空壳、知识类工具集体返回空。
+                # 「打包坏了却没人知道」比「构建失败」严重得多，改成即失败。
+                raise SystemExit(
+                    "构建失败：数据目录 %r 不存在（%s）。\n"
+                    "  knowledge/ 与 drivers/ 是知识类工具的数据源，缺失时 wheel\n"
+                    "  会是空壳（用户 pip install 后 error_code_lookup 回「知识库\n"
+                    "  为空」）。请确认在仓库根目录构建，且数据目录未被误删。"
+                    % (name, src)
+                )
             dst = os.path.join(self.build_lib, name)
             shutil.copytree(
                 src, dst, dirs_exist_ok=True,

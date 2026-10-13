@@ -222,13 +222,13 @@
       "id": "eco_frameworks",
       "name": "生态/框架识别（种）",
       "probe": {
-        "kind": "manual",
-        "now": 1,
-        "reason": "现有 STM32 HAL / ESP-IDF / Arduino 的识别散落在 analyzer 内置规则里，没有统一枚举点可数；待 G02/N-09 建 knowledge/ecosystem.json 后改自动"
+        "kind": "core_len",
+        "call": "_ecosystem_entries",
+        "reason": "2026-10-13 由 manual(now=1) 改自动：knowledge/ecosystem.json 早已建成 6 种（zephyr/rtthread/platformio/keil/iar/rust_defmt），manual 硬编码把它永久记成 1/6 待办——审计对已落地功能失明。现在直接数 core._ecosystem_entries()，加生态不用改清单"
       },
       "target": 6,
       "plan": "N-09",
-      "note": "补 Zephyr / RT-Thread / PlatformIO / Keil / IAR / Rust defmt"
+      "note": "已收录 6 种（zephyr/rtthread/platformio/keil/iar/rust_defmt）；扩容继续加 ecosystem.json 即可"
     },
     {
       "id": "toolchain_info",
@@ -735,6 +735,12 @@
       "regex": "\\+ (\\d+) 个 prompts",
       "metric": "mcp_prompts",
       "label": "README 首段 prompts 数"
+    },
+    {
+      "file": "README.md",
+      "regex": "Python 全套 (\\d+) 项",
+      "metric": "pytest_collected",
+      "label": "README 测试收集总数（pytest --collect-only 实测）"
     }
   ]
 }

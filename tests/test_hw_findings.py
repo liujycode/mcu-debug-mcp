@@ -288,10 +288,33 @@ class TestOreTrapHints(unittest.TestCase):
         self.assertIn('step.get("newline", newline)', src)
 
     def test_at_sequence_newline_false_over_loopback(self):
-        """newline=False 时，loopback 上应当收到不含 CRLF 的命令。"""
-        res = core.at_sequence("loop://", [{"cmd": "AAA", "expect": "AAA", "timeout_s": 1.0}],
+        """newline=False 时，loopback 上应当收到不含自动 CRLF 的命令。
+
+        ★ 2026-10-13：cmd 自带 "\\r\\n" —— newline=False 的真实用法就是
+          「终止符我自己给」。此前 cmd="AAA" 不带换行也能 PASS，靠的是
+          _at_line_match 把未终结的半行当整行（半包假 PASS，已修）；
+          现在整行匹配只认被 \\n 终结的行，命令就得自己带终止符。
+        """
+        res = core.at_sequence("loop://", [{"cmd": "AAA\r\n", "expect": "AAA",
+                                            "timeout_s": 1.0}],
                                newline=False)
         self.assertIn("PASS", res)
+
+    def test_at_line_match_ignores_unterminated_tail(self):
+        """半包假 PASS 钉子（2026-10-13）：未终结的尾段不是整行。
+
+        缓冲以 "OK" 结尾、\\r\\n 还在线上时，旧版判 PASS——设备实际要回
+        "OKX" 或 "ERROR" 也会中。现在必须等换行终结；设备不吐换行的场合
+        用 loose=True 显式放宽（比假通过诚实）。
+        """
+        import re
+        rx = re.compile("OK")
+        self.assertFalse(core._at_line_match("log line\r\nOK", rx)[0],
+                         "半行 OK 被当成整行命中——半包假 PASS 复发")
+        self.assertTrue(core._at_line_match("log line\r\nOK\r\n", rx)[0])
+        self.assertEqual(core._at_line_match("log line\r\nOK\r\n", rx)[1], "OK")
+        # loose 仍是显式逃生门
+        self.assertTrue(core._at_line_match("log line\r\nOK", rx, loose=True)[0])
 
 
 # ---------------------------------------------------------------------------

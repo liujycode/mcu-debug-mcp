@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcu-debug-mcp"
-version = "4.5.0"
+version = "4.5.1"
 description = "嵌入式硬件调试 MCP：串口直连 + 直连调试器读芯片身份/复位原因 + 烧录后逐字节校验 + 45 条异常模式库 + 三引擎引脚检测 + 板级知识库 + 会话持久化 + 预验证驱动库 + 报文解析（自定义帧/NMEA）"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,7 +17,15 @@ classifiers = [
     "Topic :: Software Development :: Embedded Systems",
 ]
 # 核心依赖只有 MCP 框架本身；串口/烧录能力按需安装（优雅降级不炸）
-dependencies = ["mcp>=1.0"]
+# ★ 下界与 requirements.txt 对齐（2026-10-13 审查：两处曾一个写 1.0 一个写 1.2.0，
+#   装出来的版本行为不一致；mcp 2.x 改了 FastMCP 入口名，实测炸 server.py，故钉 <2 语义由
+#   tests/test_server_smoke 类守护——升级前先跑它）
+dependencies = ["mcp>=1.2.0"]
+
+[project.urls]
+Homepage = "https://github.com/liujycode/mcu-debug-mcp"
+Repository = "https://github.com/liujycode/mcu-debug-mcp"
+Issues = "https://github.com/liujycode/mcu-debug-mcp/issues"
 
 [project.optional-dependencies]
 serial = ["pyserial>=3.5"]

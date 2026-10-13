@@ -723,7 +723,17 @@ class TestSessions(unittest.TestCase):
                        ["boot ok", "UART Error: ORE detected",
                         "HAL_UART_Receive failed: HAL_BUSY"])
         out = os.path.join(self.tmp, "r.md")
-        msg = self.mod.report_session(fname="20260922_100000_COM21_h1.log", out_path=out)
+        # 2026-10-13：report_session 接入 guard（write 档）——生成报告是写盘操作。
+        # 本测试验内容，档位放开；「readonly 下必须被挡」由隔离测试专责。
+        old = os.environ.get("MCU_DEBUG_MCP_MODE")
+        os.environ["MCU_DEBUG_MCP_MODE"] = "write"
+        try:
+            msg = self.mod.report_session(fname="20260922_100000_COM21_h1.log", out_path=out)
+        finally:
+            if old is None:
+                os.environ.pop("MCU_DEBUG_MCP_MODE", None)
+            else:
+                os.environ["MCU_DEBUG_MCP_MODE"] = old
         self.assertIn("报告已生成", msg)
         body = open(out, encoding="utf-8").read()
         self.assertIn("# 串口会话诊断报告", body)
@@ -750,9 +760,31 @@ class TestSessions(unittest.TestCase):
         out = os.path.join(self.tmp, "r.md")
         with open(out, "w", encoding="utf-8") as f:
             f.write("旧")
-        msg = self.mod.report_session(fname="a.log", out_path=out, overwrite=True)
+        # 2026-10-13：覆盖已存在文件需 overwrite=True + confirm=True 双闸门
+        # （此前 overwrite=True 直接盖，且本操作完全没接 guard 隔离层）。
+        old = os.environ.get("MCU_DEBUG_MCP_MODE")
+        os.environ["MCU_DEBUG_MCP_MODE"] = "write"
+        try:
+            msg = self.mod.report_session(fname="a.log", out_path=out,
+                                          overwrite=True, confirm=True)
+        finally:
+            if old is None:
+                os.environ.pop("MCU_DEBUG_MCP_MODE", None)
+            else:
+                os.environ["MCU_DEBUG_MCP_MODE"] = old
         self.assertIn("报告已生成", msg)
         self.assertIn("串口会话诊断报告", open(out, encoding="utf-8").read())
+
+    def test_report_session_overwrite_without_confirm_is_blocked(self):
+        """反例：overwrite=True 但缺 confirm=True → 不许盖，且要说清怎么补。"""
+        self._make_log("a.log", ["x"])
+        out = os.path.join(self.tmp, "r.md")
+        with open(out, "w", encoding="utf-8") as f:
+            f.write("旧")
+        msg = self.mod.report_session(fname="a.log", out_path=out, overwrite=True)
+        self.assertIn("confirm=True", msg)
+        self.assertEqual(open(out, encoding="utf-8").read(), "旧",
+                         "缺 confirm 时原文件被盖了——二次确认没生效")
 
     def test_report_session_ambiguous_source_lists_options(self):
         """反例：既没给来源、日志又不是唯一一份 → 说清怎么给，不瞎猜一份。"""

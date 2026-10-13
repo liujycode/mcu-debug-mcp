@@ -31,13 +31,13 @@
 | **MCU / 芯片** | pinmap **3 款**（STM32F103C8T6 / F411CEU6 / ESP32-DEV） | ≥ **10 款**，跨 5 家族：STM32 F1/F4/G0/H5 · ESP32/C3/S3 · RP2040 · nRF52 · 国产（GD32/CH32） | −7 |
 | **开发板** | boards **3 款**（bluepill / blackpill_f411 / esp32_devkitc32） | ≥ **10 款**（含各家的 Nucleo/Discovery、ESP32-S3-DevKitC、RP2040/Pico、nRF52-DK） | −7 |
 | **预验证驱动** | **9 款**（dht11/ds18b20/esp8266at/hc05/hcsr04/mpu6050/servo_sg90/ssd1306/stepper_28byj48） | ≥ **20 款**（补 I2C 系：BMP280/MPU9250/OLED-SH1106/AHT20/PCF8574；SPI 系：W25Q/RC522/ILI9341；单总线：DHT22/DS18B20 多点） | −11 |
-| **错误码表** | **6 族 48 条** | ≥ **12 族 150 条**（+HAL 状态码、FreeRTOS、Zephyr errno、lwIP、TLS/mbedTLS、SD 卡、USB） | −6 族 |
+| **错误码表** | **6 族 51 条** | ≥ **12 族 150 条**（+HAL 状态码、FreeRTOS、Zephyr errno、lwIP、TLS/mbedTLS、SD 卡、USB） | −6 族 |
 | **故障模式规则** | **45 条**（30 内置 + 15 外置） | ≥ **60 条**（+RTOS 死锁/优先级反转、堆耗尽、DMA 错、Flash 写失败、时钟未起振、SPI 模式错、I2C 时钟拉伸超时） | −16 |
 | **协议** | UART 全套 · Modbus RTU · AT · USB CDC 识别 · RTT | + **I2C/SPI 扫描读写** · CAN · 1-Wire · NMEA · 自定义二进制帧 · RS485 方向控制 | 6 项 |
 | **生态 / 框架** | STM32 HAL · ESP-IDF · Arduino（仅靠日志特征） | + Zephyr · RT-Thread · PlatformIO · Keil/IAR 工程产物 · Rust embedded（defmt） | 5 项 |
 | **工具链** | 只探烧录器 | + 编译器/GDB/SDK 版本探测 · 工程结构识别（CMake/Make/PlatformIO/Keil/IAR/IDF） | 2 项 |
 | **探针 / 烧录器** | pyocd(DAPLink) · esptool · st-flash · openocd | + ST-Link CLI · J-Link(JLinkExe/nrfjprog) · Black Magic Probe · dfu-util · avrdude · TI UniFlash | 6 项 |
-| **MCP 原语** | tools 34 · resources 11 · **prompts 0** | prompts ≥ 6（诊断流程入口） | −6 |
+| **MCP 原语** | tools 55 · resources 13 · prompts 6 | prompts ≥ 6（诊断流程入口） | ✅ |
 | **隔离防护** | **6 个会动硬件的操作全部闸门化**（打开/写/AT/波特率扫描/双口对录/烧录） | ≥ 6（新写操作随登记自动纳入） | ✅ |
 
 ### 1.2 深度（每个能力挖多深）—— 深度阶梯
@@ -56,10 +56,10 @@
 
 **现状（由 `tests/audit_capability.py` 实测输出，**不手工维护**）**：
 
-- **34 个工具中 28 个有 L1 专项断言，5 个没有**（对应持续项 N-14）
-- L3 判别力双向 / L4 边界不崩 / L6 链路连通：逐工具的机器判定矩阵见审计报告「【三】深度阶梯」
-- L5 溯源：知识库 193 条数据已有条目级 source（B① 完成），校验器强制
-- L2 真机：**串口链路已真机跑通**（2026-09-22 NUCLEO-H563ZI / COM21，ST-Link V3EC 虚拟串口）：`serial_open/read/send/session_log/close`、`at_sequence`、`analyze_log`（真机日志）已在实物上跑出真实结果，并由 `tools/live_acceptance.py` 固化为可重复的验收夹具（N-15）。**仍未真机**：HardFault 抓寄存器走 `decode_fault → symbol_lookup → stack_unwind` 全链——这批只用到真实 `.map`/`.elf`（文件侧），寄存器侧待板。审计里对未验项如实显示为「·」，不假装通过
+- **55 个工具全部有 L1 专项断言**（持续项 N-14 已清零：旧口径「34 个中 5 个没有」随工具扩充与补测全部收敛）
+- L2 真机可验 11 个 / L3 判别力双向 42 个 / L4 边界不崩 25 个 / L6 链路连通 25 个（2026-10-13 审计实测）
+- L5 溯源：知识库 250 条数据已有条目级 source（B① 完成），校验器强制
+- L2 真机：**串口链路已真机跑通**（2026-09-22 NUCLEO-H563ZI / COM21，ST-Link V3EC 虚拟串口）：`serial_open/read/send/session_log/close`、`at_sequence`、`analyze_log`（真机日志）已在实物上跑出真实结果，并由 `tools/live_acceptance.py` 固化为可重复的验收夹具（N-15）。**HardFault 抓寄存器全链亦已真机闭环**（2026-09-22，`decode_fault → symbol_lookup → stack_unwind` 在 NUCLEO-H563ZI 上跑出 9/9 PASS，详见 ROADMAP 与 `tools/fault_live.py` 留档；本行旧版「仍未真机、寄存器侧待板」为过期结论，已删除）
 
 > **不做手工评分表。** 每个工具的 L0–L6 由 §7 的 `audit_capability.py` 机器判定并输出矩阵——避免又一份需要人手维护、必然过期的数字。
 
@@ -71,7 +71,7 @@
 | CI | ✅ 已建 `.github/workflows/ci.yml`：pytest + C 测试 + 知识库核验 + 常量审计 + 能力面审计 + 打包结构核验 | — |
 | LICENSE | ✅ MIT，已落地 | — |
 | CHANGELOG | ✅ `CHANGELOG.md` 建档（含语义化版本策略：主版本=接口契约变更） | — |
-| 自检工具 | ✅ `env_status`（第 34 个工具） | — |
+| 自检工具 | ✅ `env_status` | — |
 | 示例 | ⬜ 无 `examples/` | 一个可复现 demo（离线可跑，不依赖硬件）→ N-13 |
 | 知识库贡献指南 | ⬜ 无 schema 文档 | schema + 贡献流程 → N-13 |
 | 破坏性操作防护 | ✅ **已建**：`guard.py` 统一闸门 + 六条操作矩阵 + 不可逆双闸门（见 §2.5） | — |
@@ -177,7 +177,7 @@ python -m pip install . --no-deps --target <tmpdir>
 | ~~**N-11**~~ | ~~破坏性操作统一防护~~ | 工程 | ✅ **已完成**（2026-09-22）：`guard.OPS` 统一矩阵 + 不可逆双闸门 + 运行时档位；擦除/读保护/量产写入**随其实现在同一张表里登记即可生效**（机制已就位） |
 | **N-12** | 日志与会话治理（logs 无限增长 / 大日志 / 敏感信息提示 / 保留策略） | 工程 | analyze_log 实测 1.2 MB/s 线性 |
 | **N-13** | 文档与示例：`examples/` 可复现 demo + 知识库 schema + 贡献指南 | 工程 | 「社区可贡献」的前提 |
-| **N-14** | 深度补齐：6 个无专项断言的工具（§1.2） | 深度 | 逐个补正例+反例 |
+| **N-14** | 深度补齐：~~6 个无专项断言的工具（§1.2）~~ **已清零**（2026-10-13：55/55 全部有 L1 专项断言） | 深度 | 新工具随注册自动纳入检查 |
 | ~~**N-15**~~ | ~~真机验收夹具~~ | 深度 | ✅ **已完成**（2026-09-22）：`tools/live_acceptance.py` —— 不给端口拒跑 / 只读默认 / 发字节需 `--allow-write` / 破坏关需 `--allow-destructive`；在 NUCLEO-H563ZI 上实跑 PASS 16 · FAIL 0 · SKIP 1 |
 
 ---
@@ -197,7 +197,7 @@ python -m pip install . --no-deps --target <tmpdir>
     - 全量 **435 tests 0 fail**；审计 **0 脱节、0 死代码**；CI 已建
 - 落地物：`paths.py` · `setup.py` · `coverage.json` · `tests/audit_capability.py` ·
   `tests/test_package_smoke.py` · `tests/test_capability_audit.py` · `.github/workflows/ci.yml` ·
-  `LICENSE` · `CHANGELOG.md` · `env_status`（第 34 个工具）
+  `LICENSE` · `CHANGELOG.md` · `env_status`
 
 ### 批次 1 · 接外设与烧录闭环（G06 + G05 + N-06 + N-11）
 
@@ -264,7 +264,7 @@ B 线已有的 7 项不是"额外工作"，而是**深度阶梯的通用动作**
 | 内存/断点/单步 | — | ✅ | ❌ | ❌ **坚持不做** | **差异化取舍**（§9-4） |
 | 端口不独占（用完即关） | — | — | ✅ | ⚠️ 持有句柄 | 评估（可加只读瞬时模式） |
 | **故障定位链（fault→符号→栈回溯）** | ❌ | ❌ | ❌ | ✅ **独有** | **护城河** |
-| **44 条故障模式库 + 排查步骤** | ❌ | ❌ | ❌ | ✅ **独有** | **护城河** |
+| **45 条故障模式库 + 排查步骤** | ❌ | ❌ | ❌ | ✅ **独有** | **护城河** |
 | **引脚复用三引擎冲突检测** | ❌ | ❌ | ❌ | ✅ **独有** | **护城河** |
 | **板级坑清单 / 预验证驱动库** | ❌ | ❌ | ❌ | ✅ **独有** | **护城河** |
 | **每条知识带 source 出处** | ❌ | ❌ | ❌ | ✅ **独有** | **护城河** |
@@ -295,7 +295,7 @@ B 线已有的 7 项不是"额外工作"，而是**深度阶梯的通用动作**
 ## 八、定位一句话（写进 README 首页的候选，待师兄定稿）
 
 > 竞品给的是**眼睛和手**——串口、SWD、RTT 这些通道。
-> 我们除了通道，还给**判断力**：44 条出厂故障模式、三引擎引脚冲突检测、板级坑清单、预验证驱动库、
+> 我们除了通道，还给**判断力**：45 条出厂故障模式、三引擎引脚冲突检测、板级坑清单、预验证驱动库、
 > 跑飞到具体函数的排故链。**每条结论都带出处；查不到就直说查不到，绝不给一个看着合理的答案。**
 
 ---

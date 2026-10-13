@@ -178,7 +178,8 @@ def logs_prune(keep_days: int = 0, keep_count: int = 0, dry_run: bool = True,
 
 @mcp.tool()
 def report_session(handle: int = 0, fname: str = "", out_path: str = "",
-                   tail_lines: int = 40, overwrite: bool = False) -> str:
+                   tail_lines: int = 40, overwrite: bool = False,
+                   confirm: bool = False) -> str:
     """把一次串口会话导出成 **Markdown 交付报告**（故障分析 + 原始日志附后）。
 
     调完一次问题，把「现象/证据/结论/下一步」直接变成可交付文件——毕设报告、
@@ -186,11 +187,12 @@ def report_session(handle: int = 0, fname: str = "", out_path: str = "",
 
     数据来源：给 handle（活动会话）或 fname（已落盘日志，来自 sessions_list）；
     都不给时若恰好只有一份日志会自动用它。
-    默认落点 <数据根>/reports/；已存在不覆盖（要覆盖传 overwrite=True）。
+    默认落点 <数据根>/reports/；已存在不覆盖（要覆盖传 overwrite=True + confirm=True）。
     """
     return core.report_session(
         handle=(handle or None), fname=(fname or None),
-        out_path=(out_path or None), tail_lines=tail_lines, overwrite=overwrite)
+        out_path=(out_path or None), tail_lines=tail_lines,
+        overwrite=overwrite, confirm=confirm)
 
 
 @mcp.tool()
