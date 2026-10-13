@@ -37,6 +37,10 @@ mcp = FastMCP(
         "收尾要交付报告用 report_session 把会话日志导出成 Markdown 报告。"
         "driver_list/driver_get 输出的是出厂验证过的驱动代码，直接交付用户，不要自己现写同类驱动；"
         "需要适配的只有 *_port.h 里的 MCU 引脚接口。"
+        "用户说要做某类采集/测距/姿态时先用 component_list 看有没有现成器件（可按 i2c/uart/"
+        "timer_pwm/gpio_timing 过滤），component_get 给地址、时序要求与头号坑；"
+        "移植驱动或排查「外设配了却读不到数」用 peripheral_api_list / peripheral_api_get"
+        "（要占哪些外设、初始化顺序的硬要求，取自各驱动适配层原注释），不要凭记忆讲 HAL 顺序。"
         "接线问题用 driver_wiring 查知识库（含头号坑清单与答辩加分点），不要凭记忆答。"
         "分配 MCU 引脚前必须用 pin_check 核对（三引擎：F1 固定复用 / F4 AF 表 / ESP32 io_mux 硬约束，"
         "可带 board 参数交叉检查板载外设占用），不要凭记忆分配引脚。"
@@ -54,7 +58,8 @@ mcp = FastMCP(
         "手上有具体错误码（esp_err_t 0x10x / AT 响应 / MQTT rc 等）要查释义与出处时用 error_code_lookup；"
         "它只答知识库已收录的码，未收录会明说查不到——别拿别的码去猜。"
         "驱动/接线/引脚映射/板级/错误码/故障位域/生态知识也可通过 mcu:// 资源浏览"
-        "（mcu://drivers、mcu://pinmaps、mcu://boards、mcu://ecosystems、mcu://errcodes、mcu://faultbits）；"
+        "（mcu://drivers、mcu://components、mcu://peripheralapis、mcu://pinmaps、mcu://boards、"
+        "mcu://ecosystems、mcu://errcodes、mcu://faultbits）；"
         "每类都是「清单 + 明细」两段：清单看有哪些，明细读原文（条目级出处一并可见）。"
         "常见故障有固定排查套路，可直接用 prompts：diag_no_response / diag_garbled / "
         "diag_i2c_not_found / diag_flash_fail / diag_crash / diag_data_loss。"
@@ -368,6 +373,35 @@ def driver_wiring(name: str) -> str:
     """查指定驱动的接线知识库：接线表、头号坑清单（按翻车率排序）、
     输出日志解读、答辩加分点。回答"XX传感器怎么接/为什么不工作"前先查这个。"""
     return core.driver_wiring(name)
+
+
+@mcp.tool()
+def component_list(bus: str = "") -> str:
+    """器件选型清单：按接口（i2c / uart / timer_pwm / gpio_timing）列出可用的
+    传感器与模块，带地址、微秒时序要求。回答"我要做温湿度采集/测距/姿态，
+    用哪个现成器件"时先查这里，别凭记忆报型号。bus 可按接口过滤（如 "i2c"）。"""
+    return core.component_brief(bus or None)
+
+
+@mcp.tool()
+def component_get(name: str) -> str:
+    """单个器件的选型详情：接口 / 地址 / 移植要求 / 头号坑 / 出厂验证记录 /
+    接线避坑全文。name 来自 component_list。"""
+    return core.component_get(name)
+
+
+@mcp.tool()
+def peripheral_api_list(bus: str = "") -> str:
+    """外设 API 用法知识层：每个驱动要占哪些外设（I2C1/TIM1/UART2…）、
+    初始化顺序有什么硬要求。移植驱动或排查"外设配了但读不到数"时先查这里。"""
+    return core.peripheral_api_brief(bus or None)
+
+
+@mcp.tool()
+def peripheral_api_get(name: str) -> str:
+    """单个驱动的外设初始化要求全文（取自其 *_port.h 适配层原注释）。
+    name 来自 peripheral_api_list。"""
+    return core.peripheral_api_get(name)
 
 
 @mcp.tool()
@@ -701,6 +735,24 @@ def resource_driver(name: str) -> str:
 def resource_wiring(name: str) -> str:
     """指定驱动的接线知识库（接线表+坑清单+日志解读）。"""
     return core.driver_wiring(name)
+
+
+@mcp.resource("mcu://components")
+def resource_component_list() -> str:
+    """器件选型清单（按接口分类，全部来自预验证驱动库）。"""
+    return core.component_brief()
+
+
+@mcp.resource("mcu://component/{name}")
+def resource_component(name: str) -> str:
+    """指定器件的选型详情 + 接线避坑全文。"""
+    return core.component_get(name)
+
+
+@mcp.resource("mcu://peripheralapis")
+def resource_peripheral_api_list() -> str:
+    """外设 API 用法清单（谁要哪个外设、初始化顺序要求）。"""
+    return core.peripheral_api_brief()
 
 
 @mcp.resource("mcu://pinmaps")

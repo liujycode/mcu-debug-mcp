@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""一次性验证脚本：真 MCP stdio 客户端连 server.py，核对 55 工具 / 13 资源 / 6 prompts。
+"""一次性验证脚本：真 MCP stdio 客户端连 server.py，核对 59 工具 / 16 资源 / 6 prompts。
 
 用法（managed venv，已装 mcp<2）：
     python tools/verify_stdio.py
@@ -21,8 +21,8 @@ sys.path.insert(0, SRC)
 from mcp import ClientSession, StdioServerParameters          # noqa: E402
 from mcp.client.stdio import stdio_client                     # noqa: E402
 
-WANT_TOOLS = 55
-WANT_RESOURCES = 13
+WANT_TOOLS = 59
+WANT_RESOURCES = 16
 WANT_PROMPTS = 6
 
 

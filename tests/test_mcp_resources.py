@@ -37,6 +37,8 @@ KB = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge")
 # 资源清单的**唯一权威口径**：改资源必须同时改这里，否则测试红。
 EXPECTED_STATIC = {
     "mcu://drivers",       # 驱动清单
+    "mcu://components",    # 器件选型清单（G01 补）
+    "mcu://peripheralapis",  # 外设 API 用法清单（G03 补）
     "mcu://pinmaps",       # 引脚库 MCU 清单
     "mcu://boards",        # 板级库清单
     "mcu://errcodes",      # 错误码表清单（本轮补）
@@ -46,6 +48,7 @@ EXPECTED_STATIC = {
 EXPECTED_TEMPLATES = {
     "mcu://driver/{name}",
     "mcu://wiring/{name}",
+    "mcu://component/{name}",  # G01 补
     "mcu://pinmap/{mcu}",
     "mcu://board/{name}",
     "mcu://errcode/{table}",      # 本轮补

@@ -526,6 +526,8 @@
       "id": "G01",
       "title": "器件选型库（传感器/模块：接口/地址/量程/坑）",
       "batch": 3,
+      "target": 9,
+      "note": "2026-10-13 实现：全部从 drivers/*/meta.json + *_port.h 派生（PLAN 定调与驱动库同源），零新数据；9 条 = 9 款预验证驱动，target 与驱动数同增",
       "probe": {
         "kind": "core_len",
         "call": "component_list"
@@ -547,6 +549,8 @@
       "id": "G03",
       "title": "外设 API 用法知识层（初始化顺序、常见配错）",
       "batch": 3,
+      "target": 9,
+      "note": "2026-10-13 实现：从各驱动 *_port.h 适配层提取真实 HAL 符号与初始化顺序原句；9 条 = 9 款有适配层的驱动（esp8266at 纯解析库无 port 层，其 port 相关条目不计）",
       "probe": {
         "kind": "core_len",
         "call": "peripheral_api_list"

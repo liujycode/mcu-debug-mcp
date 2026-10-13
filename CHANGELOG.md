@@ -27,32 +27,39 @@
 
 ## [4.5.3] - 2026-10-13
 
-**PyPI 发布预检轮：metadata 换轨 + 产物核验——上传前的最后一公里全过。**
-
-### Changed
-
-- **license 换轨 PEP 639**：`license = { text = "MIT" }` 表格式被 setuptools 84 标记 deprecated
-  （2027-02-18 起停收），改为 SPDX 表达式 `license = "MIT"` + 显式 `license-files = ["LICENSE"]`；
-  `build-system requires` 相应从 `setuptools>=68` 提到 `>=77`（SPDX 语法最低版本）。
-  产物 METADATA 随之从 `License: MIT` 升级为 `License-Expression: MIT`（Metadata-Version 2.4）。
-- **MANIFEST.in 清死规则**：`recursive-include .github *.yml *.yaml` 中 `*.yaml` 全仓库无匹配，
-  每次构建产生 `warning: no files found matching '*.yaml'`，收窄为 `*.yml`——构建日志零警告。
+**批次 3 知识层收口（G01 器件选型库 + G03 外设 API 用法层）+ PyPI 发布预检轮。**
 
 ### Added
 
-- **classifiers 补齐**：`Development Status :: 4 - Beta`、`Intended Audience :: Developers`、
-  `Programming Language :: Python :: 3.10–3.13`（与 requires-python 对齐，PyPI 分类页可筛）。
-- **发布预检全过（2026-10-13 实测）**：干净重建 sdist+wheel 零 deprecation warning；
-  `twine check` 双 PASSED（4.5.3-py3-none-any.whl + tar.gz）；sdist 核验 LICENSE/SECURITY.md/
-  CHANGELOG.md/README.md/pyproject.toml 全收录、knowledge 20 / drivers 55 条目；
-  wheel 核验 site-packages 顶层零泄漏、`dist-info/licenses/LICENSE` 在位、knowledge 15 /
-  drivers 45 / tools 12；README 公开页扫描无本机路径/用户名/内网 IP（COM 串口号为实测记录）；
-  `requires-python>=3.10` 经静态扫描确认无 3.11+ API（tomllib/Self/ExceptionGroup 零使用）。
+- **G01 器件选型库**（9 器件，与驱动库同源派生）：`component_list` / `component_get`
+  + 2 资源（`mcu://components`、`mcu://component/{name}`）。按接口（i2c / uart /
+  timer_pwm / gpio_timing）分类，带 7 位地址、**微秒时序要求**、头号坑、出厂验证记录。
+- **G03 外设 API 用法层**（9 条）：`peripheral_api_list` / `peripheral_api_get`
+  + 1 资源（`mcu://peripheralapis`）。每个驱动要占哪些外设（I2C1 / TIM1 / UART2…）
+  + **初始化顺序硬要求**，取自 `*_port.h` 适配层注释**原句**，不改写。
+- **MCP 面 55 → 59 工具 / 13 → 16 资源**（8 静态 + 8 模板）；系统指令补上
+  「先查器件库再答型号/先查外设用法再讲 HAL 顺序」的行为引导。
+- **tests/test_component_kb.py 21 条 + 43 subtests**：条数与驱动数一致 /
+  分类判据与真实 HAL 符号自洽 / 微秒时序判 DWT 不判函数名 / 地址只在 usage 原文中 /
+  初始化要求是原句（括号内逗号不腰斩）/ 空名错名空库都说人话。
+- classifiers 补齐：`Development Status :: 4 - Beta`、`Intended Audience :: Developers`、
+  `Programming Language :: Python :: 3.10–3.13`（与 requires-python 对齐）。
+- **PyPI 发布预检全过**：干净重建零 deprecation warning；`twine check` 双 PASSED；
+  sdist 五关键文件全收录、wheel 顶层零泄漏、`dist-info/licenses/LICENSE` 在位；
+  README 无本机路径/用户名/内网 IP；`requires-python>=3.10` 无 3.11+ API。
+
+### Changed
+
+- **license 换轨 PEP 639**：`license = { text = "MIT" }` 表格式被 setuptools 84 标记
+  deprecated（2027-02-18 起停收），改为 SPDX 表达式 + `license-files = ["LICENSE"]`；
+  `build-system requires` 从 `setuptools>=68` 提到 `>=77`。METADATA 随之升级为
+  `License-Expression: MIT`（Metadata-Version 2.4）。
+- MANIFEST.in 清理死规则 `*.yaml`（全仓无匹配），构建日志零警告。
 
 ### Fixed
 
 - 全量 pytest 偶发 3 error（test_package_smoke 安装冒烟）实锤为构建隔离环境拉依赖时
-  镜像源瞬时抖动：单跑文件 10 passed、全量复跑 704 passed / 2 skipped 与基线一致，非代码问题。
+  镜像源瞬时抖动：单跑文件 10 passed、全量复跑 704 passed / 2 skipped，非代码问题。
 
 ---
 

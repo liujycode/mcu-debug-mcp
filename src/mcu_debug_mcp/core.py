@@ -1936,6 +1936,286 @@ def driver_wiring(name):
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
+
+# ---------------------------------------------------------------
+# 器件选型库（G01）+ 外设 API 用法知识层（G03）—— 全部从驱动库**派生**，零新数据
+#
+# ★ 为什么不开 knowledge/components/ 目录（2026-10-13）：
+#   PLAN §9 决策 5 定死「产能口径必须先定，宁可少而准，不许凭记忆灌」。
+#   器件信息在 drivers/<name>/meta.json 里已经是**逐条过过 validate_knowledge
+#   的真实数据**（desc / usage / common_pitfalls / verified）；另存一份就是制造
+#   第二事实来源——两份必然漂移，最后谁也不敢信。所以这两层只做派生视图：
+#   源没了视图自动空（不会出现「视图还在、知识早没了」的静默退化）。
+#
+# ★ 派生证据从哪来（不是从模型记忆）：
+#   bus          ← meta.desc + meta.usage + *_port.h 里的真实外设符号
+#   address      ← meta.usage 里的 7 位地址字面量（正则抓 0xNN）
+#   timing       ← port 层是否提供 _delay_us（DWT 微秒时序，单总线/GPIO 时序协议依赖）
+#   hal_symbols  ← port 层里真实出现的 HAL_*/I2C1/TIM1... 符号
+#   init_requires← port 头注释里「先…初始化 / 必须…」的原句（不改写、不润色）
+# ---------------------------------------------------------------
+
+# 总线判定：按优先级从上到下，先命中先算；全不命中记 unknown（不猜）
+_BUS_RULES = (
+    ("i2c", ("i2c",)),
+    ("uart", ("uart", "usart", "串口")),
+    ("timer_pwm", ("pwm", "hal_tim", "ccr", "定时器")),
+    ("gpio_timing", ("gpio", "trig", "echo", "pin_out", "pin_read")),
+)
+
+_PORT_SYM_RE = re.compile(
+    r"HAL_[A-Za-z_0-9]+"
+    r"|\b(?:I2C\d?|SPI\d?|USART\d+|UART\d+|TIM\d+|GPIO[A-Z]?|DWT)\b")
+_HEX_ADDR_RE = re.compile(r"0[xX][0-9A-Fa-f]{2}")
+# 初始化顺序要求：只摘 port 头注释里的原句，不改写
+_INIT_REQ_RE = re.compile(
+    r"^[^\n]*?(?:先|必须|需要|确保)[^\n]*?(?:初始化|配置|Init|Start|start)[^\n]*$",
+    re.M)
+
+
+def _port_source(name):
+    """读驱动的 *_port.h 原文（适配层是外设用法的唯一真身）。"""
+    ddir = _driver_dir(name)
+    if not ddir:
+        return ""
+    texts = []
+    for f in sorted(glob.glob(os.path.join(ddir, "*_port.h"))):
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                texts.append(fh.read())
+        except Exception:
+            pass
+    return "\n".join(texts)
+
+
+def _uniq(seq, limit=None):
+    """保序去重（派生视图里同一符号常在多处出现）。"""
+    seen, out = set(), []
+    for x in seq:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+            if limit and len(out) >= limit:
+                break
+    return out
+
+
+def _component_bus(meta, port_text):
+    hay = " ".join([meta.get("desc", ""), meta.get("usage", ""),
+                     port_text]).lower()
+    for bus, keys in _BUS_RULES:
+        for k in keys:
+            if k.lower() in hay:
+                return bus
+    return "unknown"
+
+
+def _needs_us_timing(port_text):
+    """这个驱动的适配层是否真需要**微秒精度**延时。
+
+    ★ 为什么按 DWT 符号判、不按 `_delay_us` 函数名判（2026-10-13 实测踩过）：
+      stepper_28byj48 也有 `stepper_delay_us()`，但它注释里写的是
+   「HAL_Delay 毫秒粒度即可，半步延时通常 1-10ms 量级」——函数名只是接口
+   统一而已。按函数名判会把它误标成「需微秒时序」，用户照着去配 DWT 属于
+   白费功夫。反过来 dht11/ds18b20/hcsr04 的注释里明写「毫秒粒度不能用」
+   且示例实现就是 DWT->CYCCNT——判据落在 DWT 上才对得上真机事实。
+    """
+    return "DWT" in port_text
+
+
+def _split_clauses(text):
+    """按中文分句切文本，但**括号内不切**。
+
+    ★ 为什么需要括号感知（实测踩过）：mpu6050 的 usage 是
+    「port 层提供 I2C 读写两函数（7 位地址 0x68，AD0 接地）」——括号里那个逗号
+    是 0x68 与 AD0 之间的分隔，按裸逗号切会把它腰斩成「7 位地址 0x68」，
+    用户读到的是句残话。
+    """
+    out, buf, depth = [], [], 0
+    for ch in text or "":
+        if ch in "（(【[":
+            depth += 1
+        elif ch in "）)】]":
+            depth = max(0, depth - 1)
+        if depth == 0 and ch in "，；;":
+            out.append("".join(buf).strip())
+            buf = []
+        else:
+            buf.append(ch)
+    if buf:
+        out.append("".join(buf).strip())
+    return [x for x in out if x]
+
+
+def _init_requirements(meta, port_text):
+    """移植时的初始化/接线硬要求——两条真实证据源，合并去重：
+
+    1. 适配层注释里的原句（「工程里先完成 HAL_I2C_MspInit 与 hi2c1 初始化」）；
+    2. meta.usage 里点名 port 的分句（「port 里改定时器时钟/PSC/ARR 三处即可」）。
+    只摘原文，不改写、不润色。
+    """
+    reqs = [s.strip(" */*") for s in _INIT_REQ_RE.findall(port_text)]
+    for p in _split_clauses(meta.get("usage", "")):
+        # 去掉「复制 xxx.h 进工程」这类文件搬运说明，只要移植动作本身
+        if "port" in p.lower() and not p.startswith("复制"):
+            reqs.append(p)
+    return _uniq(reqs)
+
+
+def component_records():
+    """器件选型记录（结构化，G01 的数据层；coverage.json 探针数它的长度）。"""
+    out = []
+    for name, _p in _driver_dirs():
+        meta = _driver_meta(name)
+        if not meta:
+            continue
+        port_text = _port_source(name)
+        addrs = _uniq(_HEX_ADDR_RE.findall(meta.get("usage", "")))
+        out.append({
+            "name": name,
+            "desc": meta.get("desc", ""),
+            "usage": meta.get("usage", ""),
+            "bus": _component_bus(meta, port_text),
+            "address": addrs[0] if addrs else "",
+            # 微秒时序依赖：单总线 / HC-SR04 这类协议不给微秒级延时就读不出数据
+            "us_timing": _needs_us_timing(port_text),
+            "pitfalls": meta.get("common_pitfalls", ""),
+            "verified": meta.get("verified", ""),
+            "source": "drivers/%s/meta.json" % name,
+        })
+    return out
+
+
+def peripheral_records():
+    """外设 API 用法记录（结构化，G03 的数据层）。
+
+    每条回答「这个驱动到底要哪几个外设、外设初始化顺序上有什么硬要求」——
+    答案全部取自 *_port.h 里的真实代码与注释。
+    """
+    out = []
+    for name, _p in _driver_dirs():
+        meta = _driver_meta(name)
+        if not meta:
+            continue
+        port_text = _port_source(name)
+        if not port_text:
+            continue
+        reqs = _init_requirements(meta, port_text)
+        out.append({
+            "name": name,
+            "bus": _component_bus(meta, port_text),
+            "hal_symbols": _uniq(_PORT_SYM_RE.findall(port_text), limit=12),
+            "init_requires": reqs[:3],
+            "pitfalls": meta.get("common_pitfalls", ""),
+            "source": "drivers/%s/*_port.h" % name,
+        })
+    return out
+
+
+def component_list(bus=None):
+    """器件清单（结构化记录；bus 可按接口过滤，如 bus='i2c'）。"""
+    recs = component_records()
+    if bus:
+        recs = [r for r in recs if r["bus"] == bus]
+    return recs
+
+
+def component_brief(bus=None):
+    """器件清单的文本视图（MCP 工具返回用）。"""
+    recs = component_list(bus)
+    if not recs:
+        if bus:
+            return "没有 bus=%s 的器件。可用总线：%s" % (
+                bus, ", ".join(sorted({r["bus"] for r in component_records()})))
+        return "器件库为空（驱动库目录为空或 meta.json 全缺）。"
+    lines = ["共 %d 个器件%s：" % (
+        len(recs), "（bus=%s）" % bus if bus else "，全部来自预验证驱动库")]
+    for r in recs:
+        bits = [r["bus"]]
+        if r["address"]:
+            bits.append("地址 %s" % r["address"])
+        if r["us_timing"]:
+            bits.append("需微秒时序")
+        lines.append("- %s [%s]：%s" % (r["name"], " / ".join(bits), r["desc"]))
+    lines.append("（坑与接线细节用 component_get 逐个查）")
+    return "\n".join(lines)
+
+
+def component_get(name):
+    """单个器件的选型详情：接口 / 地址 / 时序要求 / 坑 / 验证记录。"""
+    recs = component_records()
+    if not recs:
+        return "器件库为空（驱动库目录为空或 meta.json 全缺）。"
+    key = (name or "").strip().lower()
+    if not key:
+        return "没给器件名。可用：%s" % ", ".join(r["name"] for r in recs)
+    hit = next((r for r in recs if r["name"].lower() == key), None)
+    if hit is None:
+        return "没有名为 %s 的器件。可用：%s" % (
+            name, ", ".join(r["name"] for r in recs))
+    lines = ["【%s】%s" % (hit["name"], hit["desc"]),
+             "接口：%s%s" % (hit["bus"],
+                          "（需 DWT 微秒时序，给错粒度读不出数据）"
+                          if hit["us_timing"] else ""),
+             "地址：%s" % (hit["address"] or "无（不占地址总线）"),
+             "用法：%s" % hit["usage"],
+             "坑：%s" % (hit["pitfalls"] or "（meta.json 未记）"),
+             "验证：%s" % hit["verified"],
+             "来源：%s" % hit["source"]]
+    wiring = driver_wiring(hit["name"])
+    if not wiring.startswith("驱动") or "暂无 wiring.md" not in wiring:
+        lines.append("===== 接线与避坑 =====\n%s" % wiring)
+    return "\n".join(lines)
+
+
+def peripheral_api_list(bus=None):
+    """外设用法记录（结构化）。"""
+    recs = peripheral_records()
+    if bus:
+        recs = [r for r in recs if r["bus"] == bus]
+    return recs
+
+
+def peripheral_api_brief(bus=None):
+    """外设用法的文本视图：谁要哪个外设、初始化有什么硬要求。"""
+    recs = peripheral_api_list(bus)
+    if not recs:
+        if bus:
+            return "没有 bus=%s 的外设用法记录。" % bus
+        return "外设 API 用法知识层为空（驱动库下没有 *_port.h 适配层）。"
+    lines = ["共 %d 条外设用法（取自各驱动 *_port.h 适配层）：" % len(recs)]
+    for r in recs:
+        lines.append("- %s [%s]：%s" % (
+            r["name"], r["bus"],
+            "、".join(r["hal_symbols"][:5]) or "（无 HAL 符号，纯解析库）"))
+        for q in r["init_requires"]:
+            lines.append("    顺序要求：%s" % q)
+    return "\n".join(lines)
+
+
+def peripheral_api_get(name):
+    """单个驱动的外设初始化要求全文（移植前照着核对一遍）。"""
+    recs = peripheral_records()
+    if not recs:
+        return "外设 API 用法知识层为空（驱动库下没有 *_port.h 适配层）。"
+    key = (name or "").strip().lower()
+    if not key:
+        return "没给驱动名。可用：%s" % ", ".join(r["name"] for r in recs)
+    hit = next((r for r in recs if r["name"].lower() == key), None)
+    if hit is None:
+        return "没有名为 %s 的记录。可用：%s" % (
+            name, ", ".join(r["name"] for r in recs))
+    lines = ["【%s】外设：%s" % (hit["name"], "、".join(hit["hal_symbols"]) or "（无）")]
+    if hit["init_requires"]:
+        lines.append("初始化顺序要求（适配层注释原句）：")
+        lines.extend("  · %s" % q for q in hit["init_requires"])
+    else:
+        lines.append("初始化顺序要求：适配层注释里没写（移植时按上面符号自行核对）。")
+    lines.append("坑：%s" % (hit["pitfalls"] or "（meta.json 未记）"))
+    lines.append("来源：%s" % hit["source"])
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------
 # 烧录桥接（不自研烧录器，桥接社区标准工具；默认 dry-run 保证安全）
 # ---------------------------------------------------------------

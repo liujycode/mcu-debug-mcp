@@ -1,6 +1,6 @@
 # mcu-debug-mcp · 嵌入式调试 MCP（领域级）
 
-让 AI"看到并看懂"你手上的板子：串口读写 + 故障模式库（45 条规则）+ 烧录失败模式直译 + Modbus 帧解析 + 编译报错解析 + 引脚冲突检测（三引擎）+ 板级知识库 + 波特率自动探测 + AT 序列回归 + 双口对录 + 会话持久化 + RTT 通道 + 烧录桥接 + 寄存器位域解码 + 调试器探测 + 预验证驱动模板库（9 款）+ **错误码统一查询（6 张表·带出处）** + **报文解析（自定义二进制帧 / NMEA-GPS）** + **工程结构与工具链探测** + **会话日志治理与交付报告**。共 55 个工具 + 13 个 MCP resources + 6 个 prompts（6 静态 resources + 7 模板 resources）。
+让 AI"看到并看懂"你手上的板子：串口读写 + 故障模式库（45 条规则）+ 烧录失败模式直译 + Modbus 帧解析 + 编译报错解析 + 引脚冲突检测（三引擎）+ 板级知识库 + 波特率自动探测 + AT 序列回归 + 双口对录 + 会话持久化 + RTT 通道 + 烧录桥接 + 寄存器位域解码 + 调试器探测 + 预验证驱动模板库（9 款）+ **器件选型库（按接口/地址/时序要求）** + **外设 API 用法层（初始化顺序硬要求）** + **错误码统一查询（6 张表·带出处）** + **报文解析（自定义二进制帧 / NMEA-GPS）** + **工程结构与工具链探测** + **会话日志治理与交付报告**。共 59 个工具 + 16 个 MCP resources + 6 个 prompts（8 静态 resources + 8 模板 resources）。
 
 **和"直接问 AI"的本质区别**：AI 不再听你转述"传感器好像不太对"，而是亲自读到串口里的真实字节——AT 指令返回了什么、数据是全 0 还是乱码、程序是不是在反复重启、**Keil 为什么烧不进去**——然后按**出厂预置的故障模式库**给出诊断和排查步骤。引脚分配前用数据手册级映射表核对（能抓 AI 幻觉接线）。驱动代码来自验证过的模板库（纯函数 PC 可测 + Python 交叉验证），不是 AI 现编的。
 
@@ -47,7 +47,7 @@ MCU_DEBUG_MCP_NO_TOUCH_DTR=1          # 打开端口时不翻转 DTR/RTS，尽�
 | 知识库质量保障 | ❌ | ✅ **validate_knowledge.py** 机械核验（引脚数/唯一性/复用唯一/正则可编译），CI 可挂 |
 | **知识库可扩展** | ❌ | ✅ 故障模式/错误码表/引脚映射/板级知识全部 JSON 外置，社区可贡献（逐条标 source） |
 
-## 工具清单（55 个）
+## 工具清单（59 个）
 
 | 工具 | 功能 | 依赖 |
 |------|------|------|
@@ -75,6 +75,8 @@ MCU_DEBUG_MCP_NO_TOUCH_DTR=1          # 打开端口时不翻转 DTR/RTS，尽�
 | flash_firmware | 烧录固件，桥接 STM32_Programmer_CLI/esptool/st-flash/pyocd，**默认 dry-run**；烧完自动复位 | 各工具（可选） |
 | driver_list / driver_get | 预验证驱动模板库（9 款，含接线表+验证记录） | 无 |
 | driver_wiring | 驱动接线知识库：接线表+头号坑+日志解读+答辩加分点 | 无 |
+| component_list / component_get | **器件选型库**：按接口（i2c / uart / timer_pwm / gpio_timing）列器件，带 7 位地址、**微秒时序要求**、头号坑、出厂验证记录；数据全部派生自预验证驱动库的 meta.json 与 *_port.h，**零凭记忆条目** | 无 |
+| peripheral_api_list / peripheral_api_get | **外设 API 用法层**：每个驱动要占哪些外设（I2C1 / TIM1 / UART2…）+ **初始化顺序硬要求**（取自适配层注释原句，如「工程里先完成 HAL_I2C_MspInit 与 hi2c1 初始化」） | 无 |
 | decode_register | 寄存器值按位域拆解 | 无 |
 | decode_register_svd | 按 CMSIS-SVD 文件解码位域（含枚举提示） | 无 |
 | **decode_fault** | **Cortex-M 故障寄存器解码**（CFSR/HFSR/BFAR/MMFAR）：20 位逐条给人话成因+排查；**三类陷阱在输出里强制拦截**（见下） | 无 |
@@ -106,13 +108,15 @@ MCU_DEBUG_MCP_NO_TOUCH_DTR=1          # 打开端口时不翻转 DTR/RTS，尽�
 >（NUCLEO-H563ZI 现成，附"编译 → 烧录 → 真机验证 → 自动恢复原固件"一条龙脚本）。
 > 为什么不自动扫串口找桥、为什么 SP-Link bridge 和 FT2232H 走不通，见 `core.py` 总线工具区块头注释。 |
 
-## MCP resources（13 个：6 静态 + 7 模板）
+## MCP resources（16 个：8 静态 + 8 模板）
 
 知识库只读浏览，AI 可主动引用——**每类知识都是「清单 + 明细」两段**：清单看有哪些，明细读原文（条目级 `source` 出处一并可见）。
 
 | 知识库 | 清单 | 明细 |
 |--------|------|------|
 | 预验证驱动 | `mcu://drivers` | `mcu://driver/{name}` · `mcu://wiring/{name}`（接线） |
+| 器件选型库 | `mcu://components` | `mcu://component/{name}`（选型详情+接线坑） |
+| 外设 API 用法 | `mcu://peripheralapis` | （取自各驱动 `*_port.h`，随驱动走，无独立明细资源） |
 | 引脚复用映射 | `mcu://pinmaps` | `mcu://pinmap/{mcu}`（pinmap JSON 原文） |
 | 板级知识 | `mcu://boards` | `mcu://board/{name}` |
 | 错误码直译表 | `mcu://errcodes` | `mcu://errcode/{table}`（整表 JSON 原文） |
@@ -204,9 +208,9 @@ mcu-debug-mcp
 | modbus/pin_check 三引擎/boards/sessions/RTT 降级 | tests/test_serial_tools.py | ✅ 本机实测通过 |
 | **知识库数据核验** | tests/validate_knowledge.py（引脚数/唯一性/fixed_mux 功能全局唯一/SWD 一致性/onboard pin 字段/正则可编译/**条目级 source 强制**） | ✅ 0 错误（曾抓出 3 处 F103 录入错误） |
 | **知识库条目级溯源** | 15 个知识文件 **250 条**数据全部带条目级 source；校验器强制（注入缺 source 必报错），并有测试保证注入后文件**逐字复原**（防止测试改写手写排版） | ✅ 本机实测通过 |
-| server.py MCP 注册层（55 工具 + 13 resources + 6 prompts） | **真 MCP 客户端 stdio 握手实测**：`list_tools()`=55 · 静态 resources=6 · 模板 resources=7 | ✅ 本机实测通过 |
-| **MCP 协议层 + 资源层真机** | **13 个资源全部 `read_resource` 可读**（7 个模板资源 driver/wiring/pinmap/board/ecosystem/errcode/faultbits 逐项实测，9 款驱动逐个读）；查不存在的名字一律友好拒绝并列出可选项、不抛异常；`tests/test_mcp_resources.py` 17 条把资源清单精确锁死 | ✅ 本机实测通过 |
-| **离线全量（Python 全套 706 项）** | `python -m pytest tests -q`：**704 passed, 2 skipped**（两个 skip 都需显式授权：真机 USB CDC 用例，以及「该口不是 USB CDC」的对照用例；收集总数由 `tests/audit_capability.py` 的 `pytest_collected` 探针机器锁定，手改数字会被审计抓出） | ✅ 本机实测通过 |
+| server.py MCP 注册层（59 工具 + 16 resources + 6 prompts） | **真 MCP 客户端 stdio 握手实测**：`list_tools()`=59 · 静态 resources=8 · 模板 resources=8 | ✅ 本机实测通过 |
+| **MCP 协议层 + 资源层真机** | **16 个资源全部 `read_resource` 可读**（8 个模板资源 driver/wiring/component/pinmap/board/ecosystem/errcode/faultbits 逐项实测，9 款驱动逐个读）；查不存在的名字一律友好拒绝并列出可选项、不抛异常；`tests/test_mcp_resources.py` 17 条把资源清单精确锁死 | ✅ 本机实测通过 |
+| **离线全量（Python 全套 727 项）** | `python -m pytest tests -q`：**725 passed, 2 skipped**（两个 skip 都需显式授权：真机 USB CDC 用例，以及「该口不是 USB CDC」的对照用例；收集总数由 `tests/audit_capability.py` 的 `pytest_collected` 探针机器锁定，手改数字会被审计抓出） | ✅ 本机实测通过 |
 | **隔离与安全（37 条）** | `tests/test_isolation.py`：档位/名单/不可逆确认/虚拟端口豁免/未登记操作 fail-closed，**含必须放行的反例**（离线打分、dry-run 预览、`loop://`）；另有静态对账与注入法反自证；并列 6 条守着`tools/live_acceptance.py`夹具自身（无端口拒跑、dry-run 不开口、DENY 不得设 `*`、收尾不得假 PASS、破坏关必须单独授权） | ✅ 本机实测通过 |
 | **排故链四工具（fault/map/符号/栈）** | tests/test_fault_chain.py：**67 项断言**，其中 30+ 条是「必须拒绝给结论」的假答案防线；**从零删掉 build_tmp 也能自举**（setUpModule 现场 gcc 生成夹具） | ✅ 本机实测通过 |
 | **真机验收夹具（N-15）** | `tools/live_acceptance.py` 在 **NUCLEO-H563ZI（STM32H563/Cortex-M33，板载 ST-Link V3EC 虚拟串口 COM21）** 上实跑：**PASS 16 · FAIL 0 · SKIP 1**；可反复跑不打死板子；破坏关单独授权后 **3/3 PASS** | ✅ 真机实测通过 |
