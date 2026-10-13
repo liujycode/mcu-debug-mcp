@@ -24,7 +24,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KB = os.path.join(ROOT, "knowledge")
+KB = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge")
 
 ERRORS = []
 
@@ -350,7 +350,7 @@ def check_drivers():
     少 meta.json 就是「这个驱动还没写全」，少源码就是空壳——但目录还在、
     driver_list 照样列出来，用户从头到尾不会知道里面是空的。
     """
-    ddir = os.path.join(ROOT, "drivers")
+    ddir = os.path.join(ROOT, "src", "mcu_debug_mcp", "drivers")
     if not os.path.isdir(ddir):
         err("drivers/ 目录不存在（预验证驱动模板库是 README 承诺的能力）")
         return

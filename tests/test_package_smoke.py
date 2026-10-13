@@ -29,10 +29,13 @@ import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import core      # noqa: E402
-import paths     # noqa: E402
+#: 包内源码目录（2026-10-13 C 档重构后 core/analyzer 等物理在这里）
+PKG_DIR = os.path.join(ROOT, "src", "mcu_debug_mcp")
+
+from mcu_debug_mcp import core      # noqa: E402
+from mcu_debug_mcp import paths     # noqa: E402
 
 #: 环境变量开关：CI 或慢机器上可关掉装包冒烟（默认开——这类缺陷只有它抓得住）
 SKIP_SMOKE = os.environ.get("MCU_DEBUG_MCP_SKIP_PACK_SMOKE") == "1"
@@ -49,7 +52,7 @@ class TestDataRootWiring(unittest.TestCase):
         """
         bad = []
         for fn in ("core.py", "analyzer.py"):
-            src = open(os.path.join(ROOT, fn), encoding="utf-8").read()
+            src = open(os.path.join(PKG_DIR, fn), encoding="utf-8").read()
             for i, line in enumerate(src.splitlines(), 1):
                 if line.lstrip().startswith("#"):
                     continue
@@ -58,30 +61,39 @@ class TestDataRootWiring(unittest.TestCase):
                     bad.append("%s:%d  %s" % (fn, i, line.strip()))
         self.assertEqual(bad, [], "又把代码目录当数据目录了：\n" + "\n".join(bad))
 
-    def test_py_modules_cover_all_root_modules(self):
-        """pyproject 的 py-modules 必须覆盖仓库根的全部顶层 .py（漏一个就装不进去）。"""
-        txt = open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8").read()
-        mods = set()
-        for line in txt.splitlines():
-            if line.strip().startswith("py-modules"):
-                mods = {m.strip().strip('"\'') for m in line.split("=", 1)[1].strip(" []").split(",")}
-        self.assertTrue(mods, "pyproject 里没找到 py-modules")
-        on_disk = {f[:-3] for f in os.listdir(ROOT)
-                   if f.endswith(".py") and f not in ("setup.py", "conftest.py")}
-        missing = sorted(on_disk - mods)
-        self.assertEqual(missing, [], "这些顶层模块没声明进 py-modules：%s" % missing)
+    def test_pyproject_uses_src_layout(self):
+        """pyproject 必须是 src 正规包布局（2026-10-13 C 档重构后唯一合法形态）。
 
-    def test_setup_hook_covers_data_dirs(self):
-        """setup.py 的 DATA_DIRS 必须覆盖全部需要随包分发的数据目录。"""
-        src = open(os.path.join(ROOT, "setup.py"), encoding="utf-8").read()
-        self.assertIn("build_py", src, "setup.py 没有 build_py 钩子——数据目录不会进包")
-        for d in ("knowledge", "drivers"):
-            self.assertIn('"%s"' % d, src.split("DATA_DIRS", 1)[1].split(")")[0],
-                          "DATA_DIRS 缺少 %s" % d)
+        历史：平铺 py-modules 布局下 wheel 顶层是 core.py / tools/ —— `core`、
+        `tools` 是 PyPI 生态最泛滥的通用名，pip 静默覆盖不报错。谁要是把
+        packages.find 改回 py-modules 或把 where 改掉，这条当场红。
+        """
+        txt = open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8").read()
+        self.assertIn("[tool.setuptools.packages.find]", txt,
+                      "pyproject 没有 packages.find —— 布局被改回去了？")
+        self.assertIn('where = ["src"]', txt,
+                      "packages.find 的 where 不是 src —— 顶层污染回来了？")
+        self.assertNotIn("py-modules", txt,
+                         "pyproject 又出现了 py-modules —— 平铺布局复活即空壳复发")
+
+    def test_package_data_wiring(self):
+        """include-package-data 与 MANIFEST.in 的包数据收录必须双双在位。
+
+        knowledge/ drivers/ tools/ 物理在包内，wheel 侧靠 include-package-data
+        （读 MANIFEST.in），sdist 侧靠同一份 MANIFEST.in —— 两边共用一份清单，
+        漏一条就复发一次「装出来是空壳」。
+        """
+        pyproject = open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8").read()
+        self.assertIn("include-package-data = true", pyproject,
+                      "pyproject 没开 include-package-data —— 包内数据不进 wheel")
+        manifest = open(os.path.join(ROOT, "MANIFEST.in"), encoding="utf-8").read()
+        for d in ("knowledge", "drivers", "tools"):
+            self.assertIn("src/mcu_debug_mcp/%s" % d, manifest,
+                          "MANIFEST.in 没收录包内 %s/ —— sdist 空壳复发" % d)
 
     def test_no_logs_dir_in_repo_root(self):
         """会话日志不许落在代码目录里（pip 装到只读 site-packages 会写不进去）。"""
-        src = open(os.path.join(ROOT, "core.py"), encoding="utf-8").read()
+        src = open(os.path.join(PKG_DIR, "core.py"), encoding="utf-8").read()
         code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
         self.assertNotIn('sys_dir, "logs"', code)
 
@@ -259,8 +271,9 @@ class TestPackageInstallSmoke(unittest.TestCase):
                       % (tag, (r.stderr or "")[-1200:]))
 
         # 数据文件必须真的在包里（数量级断言，不是「存在即可」）
-        n_know = sum(len(f) for _d, _s, f in os.walk(os.path.join(tgt, "knowledge")))
-        n_drv = sum(len(f) for _d, _s, f in os.walk(os.path.join(tgt, "drivers")))
+        pkg_tgt = os.path.join(tgt, "mcu_debug_mcp")
+        n_know = sum(len(f) for _d, _s, f in os.walk(os.path.join(pkg_tgt, "knowledge")))
+        n_drv = sum(len(f) for _d, _s, f in os.walk(os.path.join(pkg_tgt, "drivers")))
         self.assertGreaterEqual(n_know, 10, "[%s] knowledge/ 没进包" % tag)
         self.assertGreaterEqual(n_drv, 40, "[%s] drivers/ 没进包" % tag)
 
@@ -344,10 +357,11 @@ _PROBE_SRC = '''# -*- coding: utf-8 -*-
 import json, os, sys
 TGT, ROOT = r"{tgt}", r"{root}"
 sys.path.insert(0, TGT)
+# 剔掉源码树（仓库根与其 src/），否则 import 到的是原地源码，测了个寂寞
 sys.path = [p for p in sys.path
             if os.path.normcase(os.path.abspath(p or os.getcwd()))
-            != os.path.normcase(ROOT)]
-import core, analyzer, paths, guard
+            not in (os.path.normcase(ROOT), os.path.normcase(os.path.join(ROOT, "src")))]
+from mcu_debug_mcp import core, analyzer, paths, guard
 
 drv_txt = core.driver_list()
 # 隔离层端到端：显式设成只读档，再试一个写操作，必须被拦。
@@ -358,7 +372,7 @@ _guard_blocked = core.at_sequence("COM99", [{{"cmd": "AT", "expect": "OK"}}])
 result = {{
     "core_file": core.__file__,
     "core_from_target": os.path.normcase(os.path.dirname(core.__file__))
-                        == os.path.normcase(TGT),
+                        == os.path.normcase(os.path.join(TGT, "mcu_debug_mcp")),
     "data_roots": paths.data_roots(),
     "pinmaps": len(core.pinmap_list()),
     "boards": len(core.board_list()),

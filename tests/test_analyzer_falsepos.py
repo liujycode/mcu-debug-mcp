@@ -16,9 +16,9 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from analyzer import analyze_log
+from mcu_debug_mcp.analyzer import analyze_log
 
 
 def ids(text):

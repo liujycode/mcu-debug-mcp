@@ -28,8 +28,8 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+if os.path.join(ROOT, "src") not in sys.path:
+    sys.path.insert(0, os.path.join(ROOT, "src"))
 
 #: 真正的真机测试必须显式打开才会执行（见上方"逃生门"）
 ALLOW_HW = (os.environ.get("MCU_DEBUG_MCP_TEST_ALLOW_HW") or "").strip().lower() in (

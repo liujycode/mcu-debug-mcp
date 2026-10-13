@@ -144,12 +144,16 @@ class TestAuditActuallyAudits(unittest.TestCase):
         """
         tmp = tempfile.mkdtemp(prefix="mcu_dbg_dead_")
         try:
-            with open(os.path.join(tmp, "core.py"), "w", encoding="utf-8") as fh:
+            # 审计的包内源码目录是 ROOT/src/mcu_debug_mcp（_pkg_dir 动态派生），
+            # 假仓库必须镜像同一结构，注入才生效
+            pkg = os.path.join(tmp, "src", "mcu_debug_mcp")
+            os.makedirs(pkg)
+            with open(os.path.join(pkg, "core.py"), "w", encoding="utf-8") as fh:
                 fh.write("def used_fn():\n    return 1\n\n\n"
                          "def orphan_fn_xyz():\n    return 2\n\n\n"
                          "VALUE = used_fn()\n")
             for name in ("analyzer.py", "paths.py", "server.py"):
-                open(os.path.join(tmp, name), "w", encoding="utf-8").close()
+                open(os.path.join(pkg, name), "w", encoding="utf-8").close()
             os.makedirs(os.path.join(tmp, "tests"))
             old_root = ac.ROOT
             ac.ROOT = tmp
@@ -191,10 +195,12 @@ class TestIsolationAudit(unittest.TestCase):
                                                 "serial.Serial =",
                    make_isolation=True):
         tmp = tempfile.mkdtemp(prefix="mcu_dbg_iso_")
-        with open(os.path.join(tmp, "core.py"), "w", encoding="utf-8") as fh:
+        pkg = os.path.join(tmp, "src", "mcu_debug_mcp")
+        os.makedirs(pkg)
+        with open(os.path.join(pkg, "core.py"), "w", encoding="utf-8") as fh:
             fh.write(core_src)
         for name in ("analyzer.py", "paths.py", "server.py"):
-            open(os.path.join(tmp, name), "w", encoding="utf-8").close()
+            open(os.path.join(pkg, name), "w", encoding="utf-8").close()
         tdir = os.path.join(tmp, "tests")
         os.makedirs(tdir)
         if conftest_src is not None:

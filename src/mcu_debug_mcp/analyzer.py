@@ -15,16 +15,13 @@ mcu-debug-mcp · 串口日志异常模式库（analyzer.py）
 import json
 import os
 import re
-import sys
 
 # 数据根定位：与 core.py 共用唯一口径（$MCU_DEBUG_MCP_HOME > ~/.mcu-debug-mcp > 包目录）。
 # 历史坑：这里曾用 dirname(__file__)/knowledge —— pip 装出来的包里没有该目录，
 # 于是外置规则与错误码表**静默**失效（静默回退到内置 fallback，不报错）。
-_SYS_DIR = os.path.dirname(os.path.abspath(__file__))
-if _SYS_DIR not in sys.path:
-    sys.path.insert(0, _SYS_DIR)
-
-import paths  # noqa: E402
+# 2026-10-13 C 档重构：包内绝对导入原生可用，平铺布局时代的
+# 「把自己目录插进 sys.path」hack 退役。
+from mcu_debug_mcp import paths  # noqa: E402
 
 # ---------------------------------------------------------------
 # 工具函数

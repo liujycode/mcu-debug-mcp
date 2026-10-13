@@ -63,7 +63,8 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PKG_DIR = os.path.dirname(HERE)
+PKG_DIR = os.path.dirname(os.path.dirname(HERE))
+# 包的父目录（源码树 = src/；安装后 = site-packages）——import mcu_debug_mcp 用
 if PKG_DIR not in sys.path:
     sys.path.insert(0, PKG_DIR)
 
@@ -561,8 +562,8 @@ def main(argv=None):
         os.environ.pop("MCU_DEBUG_MCP_MODE", None)   # 落到默认的 readonly
 
     # 必须在设好环境变量之后再 import
-    import guard  # noqa: E402
-    import core   # noqa: E402
+    from mcu_debug_mcp import guard  # noqa: E402
+    from mcu_debug_mcp import core   # noqa: E402
 
     _hr("mcu-debug-mcp 真机验收 · 目标 %s @ %d" % (args.port, args.baud))
     _prepare_isolation(core, guard, args.port, args.allow_write or args.allow_destructive)

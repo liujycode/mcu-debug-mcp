@@ -27,8 +27,10 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓库根（含 core.py）
-sys.path.insert(0, ROOT)
+PKG_PARENT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+# 包的父目录（bridge_fw 在 src/mcu_debug_mcp/tools/bridge_fw 下，要往上三级；
+# 源码树 = src/，安装后 = site-packages）——import mcu_debug_mcp 用
+sys.path.insert(0, PKG_PARENT)
 
 
 def _find_cube_prog():
@@ -167,7 +169,7 @@ def main():
     time.sleep(1.5)                       # 等桥固件起来
 
     # ---------- 3) 逐工具验证 ----------
-    import core                            # noqa: E402  （要在 env 变化前 import？不，guard 每次调用时读 env）
+    from mcu_debug_mcp import core         # noqa: E402  （要在 env 变化前 import？不，guard 每次调用时读 env）
     results = []
 
     def check(name, fn):

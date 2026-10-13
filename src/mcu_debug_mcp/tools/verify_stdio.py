@@ -13,8 +13,10 @@ import json
 import os
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+HERE = os.path.dirname(os.path.abspath(__file__))            # .../src/mcu_debug_mcp/tools
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))  # 仓库根（往上三级）
+SRC = os.path.join(REPO, "src")
+sys.path.insert(0, SRC)
 
 from mcp import ClientSession, StdioServerParameters          # noqa: E402
 from mcp.client.stdio import stdio_client                     # noqa: E402
@@ -27,10 +29,12 @@ WANT_PROMPTS = 6
 async def main():
     params = StdioServerParameters(
         command=sys.executable,
-        args=[os.path.join(ROOT, "server.py")],
+        args=[os.path.join(SRC, "mcu_debug_mcp", "server.py")],
         env={**os.environ,
              "MCU_DEBUG_MCP_MODE": "readonly",
-             "MCU_DEBUG_MCP_PORT_DENY": "*"},
+             "MCU_DEBUG_MCP_PORT_DENY": "*",
+             # server.py 以脚本方式拉起，包内绝对导入依赖 src 在子进程的 sys.path 上
+             "PYTHONPATH": SRC + os.pathsep + os.environ.get("PYTHONPATH", "")},
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:

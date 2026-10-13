@@ -17,8 +17,8 @@ except ImportError:
     print("缺少 mcp 依赖：pip install mcp", file=sys.stderr)
     sys.exit(1)
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import core  # noqa: E402
+# 2026-10-13 C 档重构：src 正规包，绝对导入（平铺时代的 sys.path hack 退役）。
+from mcu_debug_mcp import core  # noqa: E402
 
 mcp = FastMCP(
     "mcu-debug-mcp",

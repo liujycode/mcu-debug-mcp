@@ -21,7 +21,7 @@ import os
 import unittest
 import unittest.mock as mock
 
-import core
+from mcu_debug_mcp import core
 from isolation import relaxed_env
 
 

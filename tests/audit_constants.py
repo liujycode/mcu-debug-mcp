@@ -32,12 +32,13 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import analyzer  # noqa: E402
-import core  # noqa: E402
+from mcu_debug_mcp import analyzer  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
-KNOWLEDGE = os.path.join(ROOT, "knowledge")
+# 2026-10-13 C 档重构：知识库物理在包内（源码树 = src/mcu_debug_mcp/knowledge）
+KNOWLEDGE = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge")
 
 
 def _load_error_codes(fname):
@@ -180,11 +181,14 @@ def check_rule_counts():
 # 只扫「现状声明」类文件；CHANGELOG / 测试里的历史叙述（「当时 44 条」）不算脱节。
 # --------------------------------------------------------------------------
 _RULE_COUNT_SOURCES = (
-    "core.py", "analyzer.py", "server.py", "paths.py",
+    # 2026-10-13 C 档重构：包内源码与 tools 物理在 src/mcu_debug_mcp/ 下，
+    # 全部用仓库相对路径声明（与 coverage.json 的 file_exists 同一口径）
+    "src/mcu_debug_mcp/core.py", "src/mcu_debug_mcp/analyzer.py",
+    "src/mcu_debug_mcp/server.py", "src/mcu_debug_mcp/paths.py",
     "README.md", "pyproject.toml",
     "docs/MEMORY_DEBUG.md", "docs/KNOWLEDGE_SCHEMA.md",
     "examples/offline_demo.py", "examples/README.md",
-    "tools/live_acceptance.py",
+    "src/mcu_debug_mcp/tools/live_acceptance.py",
 )
 
 #: 这些写法都是在描述「现在一共多少条」，必须与实测一致。
@@ -256,6 +260,26 @@ def check_extra_rule_counts():
     return issues
 
 
+def check_version_single_source():
+    """版本一致性：__init__（单一来源）↔ README 里的每一处 vX.Y.Z。
+
+    2026-10-13 C 档重构后 pyproject 用 dynamic attr 从 ``mcu_debug_mcp.__version__``
+    读版本，构建侧不会再脱节；剩人肉可改的是文档。README 里出现的版本号
+    全部必须是当前版本（该文件历史上只有现状声明，无历史版本字样）。
+    """
+    from mcu_debug_mcp import __version__
+    issues = []
+    readme = os.path.join(ROOT, "README.md")
+    with open(readme, encoding="utf-8") as f:
+        text = f.read()
+    for m in re.finditer(r"v(\d+\.\d+\.\d+)", text):
+        if m.group(1) != __version__:
+            line = text[:m.start()].count("\n") + 1
+            issues.append("README:%d 写 v%s，包版本是 v%s —— 改版本时漏改文档"
+                          % (line, m.group(1), __version__))
+    return issues
+
+
 CHECKS = [
     ("USB VID:PID 三处定义", check_usb_vidpid),
     ("错误码表 fallback↔知识库", check_error_codes),
@@ -263,6 +287,7 @@ CHECKS = [
     ("外置规则条数", check_rule_counts),
     ("文案里的规则条数", check_hardcoded_rule_counts),
     ("文案里的外置规则条数", check_extra_rule_counts),
+    ("版本单一来源 ↔ README", check_version_single_source),
 ]
 
 

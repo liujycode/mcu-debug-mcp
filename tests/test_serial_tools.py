@@ -15,14 +15,15 @@ import sys
 import unittest
 from contextlib import contextmanager
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 import importlib.util
 
 def _load_core():
     """加载 core 模块（零 MCP 框架依赖，可独立测试）。"""
     spec = importlib.util.spec_from_file_location(
-        "core", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core.py"))
+        "core", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "src", "mcu_debug_mcp", "core.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -353,7 +354,7 @@ class TestSerialLoop(unittest.TestCase):
 
     def test_knowledge_rule_count(self):
         """规则总数应 ≥44（30 内置 + 14 外置），防扩充后回退。"""
-        import analyzer
+        from mcu_debug_mcp import analyzer
         self.assertGreaterEqual(analyzer.rule_count(), 44)
 
 
@@ -939,7 +940,7 @@ class TestUsbCdcBaudRelevance(unittest.TestCase):
         于是 serial_list 对着已经插着的 FT2232H/J-Link 显示「未收录」——
         同一个 VID:PID 在一处被识别、另一处说不认识。
         """
-        import analyzer
+        from mcu_debug_mcp import analyzer
         for (vid, pid) in self.mod._USB_UART_BRIDGE_IDS:
             key = "%04X:%04X" % (vid, pid)
             self.assertIsNotNone(

@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcu-debug-mcp"
-version = "4.5.1"
+# 版本单一来源：src/mcu_debug_mcp/__init__.py（2026-10-13 C 档重构引入，
+# 此前 pyproject 与文档各写一份，靠人肉对齐必然过期）
+dynamic = ["version"]
 description = "嵌入式硬件调试 MCP：串口直连 + 直连调试器读芯片身份/复位原因 + 烧录后逐字节校验 + 45 条异常模式库 + 三引擎引脚检测 + 板级知识库 + 会话持久化 + 预验证驱动库 + 报文解析（自定义帧/NMEA）"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,9 +35,21 @@ debug = ["pyocd>=0.36"]
 all = ["pyserial>=3.5", "pyocd>=0.36"]
 
 [project.scripts]
-mcu-debug-mcp = "server:main"
+mcu-debug-mcp = "mcu_debug_mcp.server:main"
 
-# 平铺模块布局；knowledge/ 与 drivers/ 由 setup.py 的 build_py 钩子整份带进产物
-# （package-data 对 py-modules 不生效——这正是曾经「装出来是空壳」的根因）
+# ---------------------------------------------------------------------------
+# src 布局（2026-10-13 C 档重构）
+# 为什么必须 src/：平铺布局下 wheel 顶层是 core.py / tools/ —— `core` 与 `tools`
+# 是 PyPI 生态里最泛滥的通用名，pip 静默覆盖不报错，装一次污染一次别人的环境。
+# knowledge/ drivers/ tools/ 物理放在包内（单一事实来源），靠 include-package-data
+# + MANIFEST.in 的 prune 规则进 sdist/wheel —— 不再用 setup.py 的 build_py 钩子
+# 整目录复制（那条路正是「sdist 空壳」P0 的温床：钩子只盖 wheel 直构路径）。
+# ---------------------------------------------------------------------------
 [tool.setuptools]
-py-modules = ["server", "core", "analyzer", "paths", "guard"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mcu_debug_mcp.__version__" }

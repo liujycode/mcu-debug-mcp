@@ -73,7 +73,7 @@ def check_warnings(gcc, env):
     print("=== 逐款驱动编译（-Wall -Wextra -O1，目标零警告）===")
     objs, bad = [], []
     for d in DRIVERS:
-        src = os.path.join(ROOT, "drivers", d, d + ".c")
+        src = os.path.join(ROOT, "src", "mcu_debug_mcp", "drivers", d, d + ".c")
         obj = os.path.join(BUILD, d + ".o")
         if not os.path.exists(src):
             print("  %-18s *** 源文件缺失 ***" % d)
@@ -81,7 +81,7 @@ def check_warnings(gcc, env):
             continue
         r = run([gcc, "-c", "-Wall", "-Wextra", "-O1",
                  "-I", os.path.join(TESTS, "stub"),
-                 "-I", os.path.join(ROOT, "drivers", d),
+                 "-I", os.path.join(ROOT, "src", "mcu_debug_mcp", "drivers", d),
                  src, "-o", obj], env)
         w = r.stderr.strip()
         if r.returncode != 0:
@@ -104,7 +104,7 @@ def link_and_run(gcc, env, objs):
     exe = os.path.join(BUILD, "test_driver_logic.exe" if os.name == "nt" else "test_driver_logic")
     cmd = [gcc, "-Wall", "-Wextra", "-O1", "-I", os.path.join(TESTS, "stub")]
     for d in DRIVERS:
-        cmd += ["-I", os.path.join(ROOT, "drivers", d)]
+        cmd += ["-I", os.path.join(ROOT, "src", "mcu_debug_mcp", "drivers", d)]
     cmd += [os.path.join(TESTS, "test_driver_logic.c")] + objs + ["-o", exe]
     r = run(cmd, env)
     if r.returncode != 0:

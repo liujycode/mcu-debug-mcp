@@ -11,9 +11,9 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from analyzer import (analyze_log, identify_usb_serial, suggest_baudrates,
+from mcu_debug_mcp.analyzer import (analyze_log, identify_usb_serial, suggest_baudrates,
                       _printable_ratio, rule_count, _EXTRA_RULES, _EXTRA_DIAG)
 
 
@@ -390,7 +390,7 @@ class TestPatternRules(unittest.TestCase):
         # 领域级可信度：外置规则必须逐条标注来源
         import json
         path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "knowledge", "fault_patterns.json")
+                            "src", "mcu_debug_mcp", "knowledge", "fault_patterns.json")
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         for item in data["rules"]:

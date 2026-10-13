@@ -14,9 +14,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 
-import analyzer  # noqa: E402
+from mcu_debug_mcp import analyzer  # noqa: E402
 import audit_constants as ac  # noqa: E402
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 
 class TestConstantsAudit(unittest.TestCase):

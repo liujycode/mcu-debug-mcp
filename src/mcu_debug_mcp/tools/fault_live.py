@@ -44,9 +44,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROJ = os.path.dirname(HERE)
+PROJ = os.path.dirname(os.path.dirname(HERE))   # 包的父目录（源码树 = src/；安装后 = site-packages）
 sys.path.insert(0, PROJ)
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 FW_DIR = os.path.join(HERE, "fault_demo_fw")
 BUILD = os.path.join(FW_DIR, "build.py")

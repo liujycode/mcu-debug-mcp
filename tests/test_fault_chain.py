@@ -16,9 +16,9 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURES = os.path.join(ROOT, "tests", "fixtures")
@@ -678,7 +678,7 @@ class TestValidatorCanCatchErrors(unittest.TestCase):
         排版毁了，属于【测试污染生产文件】，下一次 diff 整篇变色。
         """
         import json
-        src = os.path.join(ROOT, "knowledge", relpath)
+        src = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge", relpath)
         orig_text = open(src, encoding="utf-8").read()
         data = json.loads(orig_text)
         mutate(data)
@@ -724,7 +724,7 @@ class TestValidatorCanCatchErrors(unittest.TestCase):
     def test_injection_leaves_file_byte_for_byte_intact(self):
         """注入测试跑完后文件必须逐字复原——防止测试污染知识库排版。"""
         import hashlib
-        src = os.path.join(ROOT, "knowledge", "error_codes", "cme.json")
+        src = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge", "error_codes", "cme.json")
         before = hashlib.sha256(open(src, "rb").read()).hexdigest()
 
         def mutate(d):

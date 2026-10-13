@@ -163,15 +163,17 @@ serial_open 自动在 `logs/` 落盘会话日志（端口/波特率/时间戳元
 ## 安装
 
 ```bash
-# 方式一：源码直接用（配置见下）
-pip install pyserial mcp        # 必需
-pip install pyocd               # 可选：调试器探测 / RTT
-pip install esptool             # 可选：ESP 烧录
+# 方式一：PyPI / pip（发布形态，src 正规包——不污染 site-packages 顶层）
+pip install mcu-debug-mcp          # 核心（MCP 框架）
+pip install "mcu-debug-mcp[all]"   # + pyserial（串口）+ pyocd（调试器/RTT）
 
-# 方式二：pip 安装（本目录）
+# 方式二：从源码目录安装
 pip install .[all]
 
-# 方式三：装完后用 console script 起服务（等价于 python server.py）
+# 方式三：开发模式（改代码即时生效；测试/审计直接从 src/ 导入）
+pip install -e .[all]
+
+# 装完后用 console script 起服务（等价于 python -m mcu_debug_mcp.server）
 mcu-debug-mcp
 ```
 
@@ -191,7 +193,7 @@ mcu-debug-mcp
 
 **Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式。
 
-## 验证状态（2026-10-13 复验，v4.5.1）
+## 验证状态（2026-10-13 复验，v4.5.2）
 
 | 模块 | 验证方式 | 状态 |
 |------|----------|------|
@@ -292,45 +294,44 @@ mcu-debug-mcp
 
 ```
 mcu-debug-mcp/
-├── server.py           # MCP 薄壳（FastMCP 注册 55 工具 + 13 resources + 6 prompts）
-├── core.py             # 全部工具实现（零框架依赖，可独立测试）
-├── analyzer.py         # 故障模式引擎（30 内置规则 + JSON 外置规则加载 + min_count 计数门槛）
-├── guard.py            # 运行时隔离层（默认禁写硬件 + 端口名单 + 不可逆操作二次确认）
-├── paths.py            # 数据根定位（代码目录 ≠ 数据目录；外置层可合并覆盖）
-├── setup.py            # 打包钩子（整目录带上 knowledge/ 与 drivers/）
+├── src/mcu_debug_mcp/  # ★ 正规包（2026-10-13 C 档重构：wheel 不再污染 site-packages 顶层）
+│   ├── __init__.py     # 版本单一来源（pyproject dynamic attr 从这读）
+│   ├── server.py       # MCP 薄壳（FastMCP 注册 55 工具 + 13 resources + 6 prompts）
+│   ├── core.py         # 全部工具实现（零框架依赖，可独立测试）
+│   ├── analyzer.py     # 故障模式引擎（30 内置规则 + JSON 外置规则加载 + min_count 计数门槛）
+│   ├── guard.py        # 运行时隔离层（默认禁写硬件 + 端口名单 + 不可逆操作二次确认）
+│   ├── paths.py        # 数据根定位（$HOME env > ~/.mcu-debug-mcp > 包内置；外置层可合并覆盖）
+│   ├── knowledge/      # 领域知识库（JSON 外置，社区可贡献；随包分发）
+│   │   ├── fault_patterns.json  # 可外置故障模式规则（正则类，逐条标 source，支持 min_count）
+│   │   ├── error_codes/         # 错误码直译表（esp_idf/at_common/cwjap/cme/mqtt_rc/modbus_exception）
+│   │   ├── pinmap/              # MCU 引脚复用映射（数据手册级，三引擎：f103c8t6/f411ceu6/esp32dev）
+│   │   └── boards/              # 板级知识库（bluepill / blackpill_f411）
+│   ├── drivers/        # 预验证驱动模板 9 款（LLM 只选型，不现编代码；.h/.c/port/wiring.md/meta.json）
+│   └── tools/          # live_acceptance.py 真机验收夹具（默认只读）+ bridge_fw 桥固件
+│                        # + verify_stdio.py 端到端 + mutation_check.py 变异验证
+├── setup.py            # 仅保留构建临时目录重定向（打包声明全在 pyproject.toml）
 ├── coverage.json       # 能力面清单（26 缺口 + 27 能力轴，审计脚本据此对账）
-├── SECURITY.md         # 安全与隔离模型 + 破坏性操作矩阵
-├── pyproject.toml      # pip/uvx 可安装（v4.5.1）
-├── tools/              # live_acceptance.py：真机验收夹具（默认只读，需 --allow-write 才发字节）
+├── SECURITY.md         # 安全与隔离模型 + 破坏性操作矩阵 + 漏洞报告通道
+├── pyproject.toml      # src 布局 + include-package-data + console script（v4.5.2）
+├── MANIFEST.in         # sdist 收录清单（漏一行就复发「装出来是空壳」）
 ├── requirements.txt
-├── knowledge/          # 领域知识库（JSON 外置，社区可贡献）
-│   ├── fault_patterns.json      # 可外置故障模式规则（正则类，逐条标 source，支持 min_count）
-│   ├── error_codes/             # 错误码直译表（esp_idf/at_common/cwjap/cme/mqtt_rc/modbus_exception）
-│   ├── pinmap/                  # MCU 引脚复用映射（数据手册级，三引擎）
-│   │   ├── stm32f103c8t6.json   # 蓝药丸 LQFP48 全量（engine: fixed_mux）
-│   │   ├── stm32f411ceu6.json   # 黑药丸（engine: af_table）
-│   │   └── esp32dev.json        # ESP32（engine: io_mux，硬约束型）
-│   └── boards/                  # 板级知识库（板载外设+坑清单+供电）
-│       ├── bluepill.json        # 蓝药丸
-│       └── blackpill_f411.json  # 黑药丸
-├── drivers/            # 预验证驱动模板（LLM 只选型，不现编代码）
-│   ├── dht11/ ds18b20/ esp8266at/ hcsr04/ mpu6050/ ssd1306/
-│   ├── servo_sg90/ stepper_28byj48/ hc05/
-│   │   └── 每款：.h/.c/port 适配层/wiring.md 接线与坑清单/meta.json
+├── examples/           # offline_demo.py：离线可跑的示例
+├── docs/               # AUDIT-2026-10-13.md 审查报告（含修复记录）等
 └── tests/
-    ├── test_analyzer.py        # 99 项，✅ 已验证
+    ├── test_analyzer.py        # 101 项，✅ 已验证
     ├── test_driver_logic_py.py # 49 项，✅ 已验证（C 算法对拍）
     ├── test_driver_logic.c     # C 版同源测试，✅ 107 checks 0 failed（9 款驱动全量）
     ├── run_c_tests.py          # C 测试运行器（无需 make，自动处理 msys2 的 cc1 PATH 坑）
     ├── Makefile.logic          # C 测试 makefile（等价路径）
     ├── validate_knowledge.py   # 知识库核验脚本（CI 可挂），✅ 0 错误
     ├── audit_capability.py     # 能力面审计：广度/深度阶梯/缺口/文档对账/**隔离与安全**
+    ├── audit_constants.py      # 常量一致性审计（含版本单一来源 ↔ README）
     ├── conftest.py             # 测试期强制硬件隔离（锁档位 + 禁端口 + 替换串口构造）
     ├── isolation.py            # 临时解除隔离的唯一入口（给「测笼子内部逻辑」的测试用）
-    ├── test_isolation.py       # 隔离层专项 31 条
-    ├── test_package_smoke.py   # 打包冒烟（真装 + 子进程 + 剔除仓库根）
+    ├── test_isolation.py       # 隔离层专项
+    ├── test_package_smoke.py   # 打包冒烟（真构建 sdist+wheel 双安装 + 子进程 + 剔除源码树）
     ├── stub/                   # C 测试桩（port_all.h + 各驱动桩头文件）
-    └── test_serial_tools.py    # 58 项，✅ 全过 0 skip（含 loop:// 回环端到端）
+    └── test_serial_tools.py    # ✅ 全过（含 loop:// 回环端到端）
 ```
 
 ## Windows 上的 gcc 坑（实测记录）

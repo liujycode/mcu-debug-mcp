@@ -15,9 +15,9 @@ from isolation import relaxed_env  # noqa: E402  测试辅助：临时解除隔�
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 
 def _modbus_frame(body_hex):

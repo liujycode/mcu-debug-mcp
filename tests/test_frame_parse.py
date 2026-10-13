@@ -17,9 +17,9 @@ import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 
 #: 公开标准例句（GGA/RMC 的经典样例，校验和 47 / 6A 为公开值）

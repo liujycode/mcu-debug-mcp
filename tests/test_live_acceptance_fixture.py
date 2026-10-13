@@ -24,11 +24,25 @@ import sys
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_TOOLS = os.path.join(ROOT, "tools")
+_TOOLS = os.path.join(ROOT, "src", "mcu_debug_mcp", "tools")
 if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
 
 import live_acceptance as la  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _restore_environ():
+    """每个测试前后快照恢复 os.environ。
+
+    夹具的流程函数会真改 os.environ（PORT_ALLOW / MODE / PORT_DENY…），
+    不恢复就泄漏给后面跑的测试——全量按字母序时 isolation 恰好先跑掩盖了它，
+    任何调整文件顺序的跑法都会炸出假失败（2026-10-13 实测踩到）。
+    """
+    before = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(before)
 
 
 # --------------------------------------------------------------------------- #

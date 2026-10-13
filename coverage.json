@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updatedAt": "2026-09-22",
+  "updatedAt": "2026-10-13",
   "note": "能力面清单（机器可读）——本文件是「应该覆盖什么」的唯一权威声明。tests/audit_capability.py 拿它与实现、文档三方对账，缺口与状态全部实测得出，不手工维护数字。改能力面就改这里，不要改文档里的数字。",
   "howto": {
     "probe.kind": {
@@ -356,7 +356,7 @@
         "kind": "file_exists",
         "paths": [
           "setup.py",
-          "paths.py"
+          "src/mcu_debug_mcp/paths.py"
         ]
       },
       "note": "另需打包冒烟测试绿（tests/test_package_smoke.py）"
@@ -453,7 +453,7 @@
       "probe": {
         "kind": "file_exists",
         "paths": [
-          "knowledge/ecosystem.json"
+          "src/mcu_debug_mcp/knowledge/ecosystem.json"
         ]
       }
     },
@@ -518,7 +518,7 @@
       "probe": {
         "kind": "file_exists",
         "paths": [
-          "tools/live_acceptance.py"
+          "src/mcu_debug_mcp/tools/live_acceptance.py"
         ]
       }
     },
@@ -527,10 +527,8 @@
       "title": "器件选型库（传感器/模块：接口/地址/量程/坑）",
       "batch": 3,
       "probe": {
-        "kind": "file_exists",
-        "paths": [
-          "knowledge/components/index.json"
-        ]
+        "kind": "core_len",
+        "call": "component_list"
       }
     },
     {
@@ -550,10 +548,8 @@
       "title": "外设 API 用法知识层（初始化顺序、常见配错）",
       "batch": 3,
       "probe": {
-        "kind": "file_exists",
-        "paths": [
-          "knowledge/peripheral_usage/index.json"
-        ]
+        "kind": "core_len",
+        "call": "peripheral_api_list"
       }
     },
     {

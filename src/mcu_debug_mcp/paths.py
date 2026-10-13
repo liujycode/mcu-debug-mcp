@@ -25,7 +25,7 @@
 import fnmatch
 import os
 
-#: 本模块所在目录（源码运行时 = 仓库根；pip 安装后 = site-packages 根）
+#: 本模块所在目录（源码运行时 = src/mcu_debug_mcp；pip 安装后 = 包在 site-packages 的目录）
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 
 #: 显式指定数据根的环境变量名
@@ -162,9 +162,11 @@ def _writable(d):
 def is_source_tree():
     """``PKG_DIR`` 是不是源码仓库（而非 pip 装出来的 site-packages）。
 
-    判据用 ``pyproject.toml``：wheel 里不含它，源码仓库里一定有。
+    2026-10-13 C 档重构后包在 ``<root>/src/mcu_debug_mcp/``，判据改为
+    往上两级找 ``pyproject.toml``（wheel 里不含它，源码仓库里一定有）。
     """
-    return os.path.isfile(os.path.join(PKG_DIR, "pyproject.toml"))
+    return os.path.isfile(
+        os.path.join(PKG_DIR, os.pardir, os.pardir, "pyproject.toml"))
 
 
 def writable_root():

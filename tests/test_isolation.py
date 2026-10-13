@@ -23,11 +23,11 @@ import unittest
 import unittest.mock as mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+if os.path.join(ROOT, "src") not in sys.path:
+    sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import core        # noqa: E402
-import guard       # noqa: E402
+from mcu_debug_mcp import core        # noqa: E402
+from mcu_debug_mcp import guard       # noqa: E402
 
 R = guard.MODE_READONLY
 W = guard.MODE_WRITE
@@ -333,7 +333,7 @@ class TestLiveAcceptanceFixture(unittest.TestCase):
       · 收尾"拉回安全态"那步无条件记 PASS，板子明明被打死了、报告上还是绿的。
     """
 
-    FIXTURE = os.path.join(ROOT, "tools", "live_acceptance.py")
+    FIXTURE = os.path.join(ROOT, "src", "mcu_debug_mcp", "tools", "live_acceptance.py")
 
     def _src(self):
         with open(self.FIXTURE, encoding="utf-8") as f:

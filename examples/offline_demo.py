@@ -14,10 +14,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+if os.path.join(ROOT, "src") not in sys.path:
+    sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 
 def show(title, text, max_lines=14):

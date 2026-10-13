@@ -13,23 +13,25 @@ import os
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+# 本脚本随 tools/ 进包后位于 src/mcu_debug_mcp/tools/，仓库根要往上四级
 PY = sys.executable
 
 TARGETS = [
-    ("M1 _bridge_lines 半包", "core.py",
+    ("M1 _bridge_lines 半包", "src/mcu_debug_mcp/core.py",
      '    for ln in parts[:-1]:                       # 丢掉未终结的尾段',
      '    for ln in parts:',
      "tests/test_bus_tools.py::BridgeHandshakeTest::test_unterminated_reply_is_not_taken_as_complete"),
-    ("M2 _at_line_match 半包", "core.py",
+    ("M2 _at_line_match 半包", "src/mcu_debug_mcp/core.py",
      '    for raw in parts[:-1]:\n        line = raw.strip()\n        if line and rx.fullmatch(line):\n            return True, line\n    return False, ""',
      '    for raw in parts:\n        line = raw.strip()\n        if line and rx.fullmatch(line):\n            return True, line\n    return False, ""',
      "tests/test_hw_findings.py::TestOreTrapHints::test_at_line_match_ignores_unterminated_tail"),
-    ("M3 flash_verify 假一致", "core.py",
+    ("M3 flash_verify 假一致", "src/mcu_debug_mcp/core.py",
      '            if not seg_ok:\n                # 2026-10-13：此前这里只判 seg_bad == 0，回读失败也打印\n                # "✓ 完全一致" —— 校验工具给假通过（探针掉线也报固件已正确烧入）。\n                lines.append("  段%d @0x%08X  %6d 字节  ？ 未能校验（回读失败，"\n                             "不能认定一致）" % (idx, addr, len(data)))\n            elif seg_bad == 0:',
      '            if seg_bad == 0:',
      "tests/test_probe_direct.py::FlashVerifyTest::test_read_failure_is_reported_not_treated_as_match"),
-    ("M4 SENSOR_FF 无守卫", "analyzer.py",
+    ("M4 SENSOR_FF 无守卫", "src/mcu_debug_mcp/analyzer.py",
      '    wordy = re.findall(\n        r"(?im)^(?![^\\n]*(?:strength|rssi|snr|signal|count|queue|level|dropped"',
      '    wordy = re.findall(\n        r"(?im)^[^\\n\\d-]*(?:255|65535|-1|0[xX][fF]{1,2})\\b',
      "tests/test_analyzer.py::TestSensorFF::test_wifi_strength_not_misjudged"),

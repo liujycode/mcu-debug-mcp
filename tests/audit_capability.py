@@ -40,14 +40,24 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+if os.path.join(ROOT, "src") not in sys.path:
+    sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import core       # noqa: E402
-import analyzer   # noqa: E402
-import paths      # noqa: E402
+from mcu_debug_mcp import core       # noqa: E402
+from mcu_debug_mcp import analyzer   # noqa: E402
+from mcu_debug_mcp import paths      # noqa: E402
 
 COVERAGE_PATH = os.path.join(ROOT, "coverage.json")
+
+
+def _pkg_dir():
+    """包内源码目录（2026-10-13 C 档重构后物理在 src/mcu_debug_mcp/）。
+
+    ★ 每次调用时从**当前** ROOT 派生，不缓存 —— test_capability_audit 用
+      patch ac.ROOT 指到临时仓库的方式做注入法测试，这里若在导入期固化，
+      注入就会失效（审计永远在读真实源码，假仓库白造）。
+    """
+    return os.path.join(ROOT, "src", "mcu_debug_mcp")
 
 REFUSAL_PAT = re.compile(
     r'assertIn\(\s*["\'](?:没有|无效|需要|不能|请先|未知|未收录|为空|查不到|只支持|不支持)'
@@ -64,6 +74,12 @@ CLASS_PAT = re.compile(r"^class (\w+)", re.M)
 
 def _read(rel):
     with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _pkg_read(name):
+    """读包内源码文件（core.py / server.py 等，2026-10-13 后物理在 src/mcu_debug_mcp/）。"""
+    with open(os.path.join(_pkg_dir(), name), encoding="utf-8") as fh:
         return fh.read()
 
 
@@ -110,7 +126,7 @@ def _split_test_funcs(src):
 
 
 def server_decorators():
-    src = _read("server.py")
+    src = _pkg_read("server.py")
     return {
         "tool": len(re.findall(r"@mcp\.tool\(\)", src)),
         "resource": len(re.findall(r"@mcp\.resource\(", src)),
@@ -120,7 +136,7 @@ def server_decorators():
 
 def registered_tools():
     """server.py 里 @mcp.tool() 注册的工具名（顺序即源码顺序）。"""
-    src = _read("server.py")
+    src = _pkg_read("server.py")
     return re.findall(r"@mcp\.tool\(\)\s*\ndef (\w+)\(", src)
 
 
@@ -165,9 +181,9 @@ def _guard_op_count():
       「每一个会动硬件的操作都有统一防护」——登记了 + 全字段齐全才算数。
       新写的写操作若忘了登记，这个数不涨，N-11 就不会被误标成已完成。
     """
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
-    import guard
+    if os.path.join(ROOT, "src") not in sys.path:
+        sys.path.insert(0, os.path.join(ROOT, "src"))
+    from mcu_debug_mcp import guard
     need = ("title", "needs", "irreversible", "why", "how")
     return sum(1 for spec in guard.OPS.values() if all(k in spec for k in need))
 
@@ -297,8 +313,8 @@ def _top_level_names(src):
 def dead_code():
     """顶层函数/常量：全仓（源码 + 测试 + 文档）零引用即视为死代码候选。"""
     search_blobs = []
-    for rel in ("core.py", "analyzer.py", "paths.py", "server.py"):
-        search_blobs.append(_read(rel))
+    for rel in ("core.py", "analyzer.py", "paths.py", "server.py"):  # 包内源码
+        search_blobs.append(_pkg_read(rel))
     tdir = os.path.join(ROOT, "tests")
     for fn in sorted(os.listdir(tdir)):
         if fn.endswith(".py"):
@@ -307,7 +323,7 @@ def dead_code():
 
     suspects = []
     for rel in ("core.py", "analyzer.py", "paths.py"):
-        src = _read(rel)
+        src = _pkg_read(rel)
         for name, lineno in _top_level_names(src).items():
             if name.startswith("__"):
                 continue
@@ -366,7 +382,7 @@ def isolation_audit():
         if not ok:
             failures.append({"label": "隔离失效", "detail": "%s —— %s" % (name, why_failed)})
 
-    core_src = _read("core.py")
+    core_src = _pkg_read("core.py")
     lines = core_src.splitlines()
 
     # ① 串口构造唯一入口
@@ -379,9 +395,9 @@ def isolation_audit():
     # ② guard.OPS ↔ core 调用点（双向）
     ops, default_mode = [], ""
     try:
-        if ROOT not in sys.path:
-            sys.path.insert(0, ROOT)
-        import guard as _guard
+        if os.path.join(ROOT, "src") not in sys.path:
+            sys.path.insert(0, os.path.join(ROOT, "src"))
+        from mcu_debug_mcp import guard as _guard
         ops = sorted(_guard.OPS)
         default_mode = _guard.DEFAULT_MODE
     except Exception as e:
@@ -405,9 +421,9 @@ def isolation_audit():
     #   就永远不会被报出来。宁可让新操作因为这条检查而必须显式接上。
     irrev = []
     try:
-        if ROOT not in sys.path:
-            sys.path.insert(0, ROOT)
-        import guard as _g2
+        if os.path.join(ROOT, "src") not in sys.path:
+            sys.path.insert(0, os.path.join(ROOT, "src"))
+        from mcu_debug_mcp import guard as _g2
         irrev = sorted(k for k, v in _g2.OPS.items() if v.get("irreversible"))
     except Exception as e:                                # noqa: BLE001
         rec(False, "读取 guard.OPS 里的不可逆操作", "导入 guard.py 失败：%s" % e)

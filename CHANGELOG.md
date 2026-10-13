@@ -25,6 +25,39 @@
 
 ---
 
+## [4.5.2] - 2026-10-13
+
+**C 档结构性重构：src 正规包布局——「能进 PyPI 而不污染别人环境」的最后一关。**
+接口零变更；数据目录物理进包，wheel 顶层不再出现 core.py / tools/ 这类生态泛滥名。
+
+### Changed（打包结构）
+- **`src/mcu_debug_mcp/` 正规包**：server/core/analyzer/guard/paths + knowledge/ +
+  drivers/ + tools/ 全部物理移入包内（git mv 保留历史）；包内改绝对导入，
+  平铺时代的「把自己目录插进 sys.path」hack 退役。
+- **数据分发换机制**：setup.py 的 build_py 整目录复制钩子退役（它只盖 wheel 直构
+  路径——正是「sdist 空壳」P0-1 的温床），改为 `include-package-data = true` +
+  MANIFEST.in（sdist/wheel 共用一份清单）；setup.py 仅保留构建临时目录重定向
+  （批量删除保护环境的实测硬约束）。
+- **版本单一来源**：`mcu_debug_mcp/__init__.py` 的 `__version__`，pyproject 用
+  `dynamic = ["version"]` 从那读；常量审计新增「版本 ↔ README 全量比对」检查。
+- `_pkg_version()` 回退链重写：安装元数据 → 包 `__init__`（旧回退读同目录
+  pyproject.toml，src 布局后两个前提都不成立）。
+- CI 打包结构核验改查包内路径，并加**反污染断言**（site-packages 顶层不得出现
+  core.py / tools/）。
+
+### Added（判据与测试卫生）
+- D 档判据升级：G01/G03 从 `file_exists`（touch 空 json 即判完成）改为
+  `core_len` 要求真有读取函数——读取入口落地前诚实保持未完成。
+- PLAN.md 的 N-08 按轴分列：7 轴各自实测差距（最大缺口=错误码条目 −99），
+  不再用最小那条代表整体。
+- tests/conftest 及 5 处 sys.path 守卫修正：守卫从「ROOT 在不在 sys.path」改为
+  「插入目标 src 在不在」——`python -m pytest` 会把 CWD(=ROOT) 放进 sys.path，
+  旧守卫恒假，src 永远插不进去（重构过程中被测试网当场抓住）。
+- test_live_acceptance_fixture 增加 autouse 环境快照：夹具流程真改 os.environ
+  （PORT_ALLOW/MODE），不恢复会泄漏给后续测试（按字母序跑掩盖了它）。
+
+---
+
 ## [4.5.1] - 2026-10-13
 
 **审查报告（`docs/AUDIT-2026-10-13.md`）6 个 P0 全部清零 + B 档上线质量收口。

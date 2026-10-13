@@ -30,12 +30,12 @@ import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+if os.path.join(ROOT, "src") not in sys.path:
+    sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import analyzer  # noqa: E402
-import core      # noqa: E402
-import paths     # noqa: E402
+from mcu_debug_mcp import analyzer  # noqa: E402
+from mcu_debug_mcp import core      # noqa: E402
+from mcu_debug_mcp import paths     # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +283,7 @@ class TestOreTrapHints(unittest.TestCase):
 
     def test_at_sequence_no_hardcoded_crlf(self):
         """源码里不许再出现写死的 (cmd + "\\r\\n")。"""
-        src = io.open(os.path.join(ROOT, "core.py"), encoding="utf-8").read()
+        src = io.open(os.path.join(ROOT, "src", "mcu_debug_mcp", "core.py"), encoding="utf-8").read()
         self.assertNotIn('s.write((cmd + "\\r\\n").encode())', src)
         self.assertIn('step.get("newline", newline)', src)
 
@@ -410,7 +410,7 @@ class TestHostTargetCheck(unittest.TestCase):
 # ---------------------------------------------------------------------------
 class TestOreKnowledgeRule(unittest.TestCase):
     def _rule(self):
-        p = os.path.join(ROOT, "knowledge", "fault_patterns.json")
+        p = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge", "fault_patterns.json")
         with io.open(p, encoding="utf-8") as fh:
             d = json.load(fh)
         for r in d["rules"]:

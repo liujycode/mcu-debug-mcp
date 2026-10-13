@@ -49,6 +49,7 @@ jobs:
 
       - name: 打包产物结构核验
         # 双保险：即使 pytest 里的冒烟被跳过，这一条也保证数据目录进包
+        # （2026-10-13 src 布局重构后数据在包内 mcu_debug_mcp/ 下）
         run: |
           python -m venv /tmp/venv-check
           /tmp/venv-check/bin/pip install . --no-deps -q
@@ -57,7 +58,11 @@ jobs:
           sys.path.insert(0, os.path.join(sys.prefix, "lib"))
           import glob
           base = glob.glob(os.path.join(sys.prefix, "lib", "python*", "site-packages"))[0]
-          assert os.path.isdir(os.path.join(base, "knowledge")), "knowledge/ 没进包"
-          assert os.path.isdir(os.path.join(base, "drivers")), "drivers/ 没进包"
-          print("打包结构 OK：", base)
+          pkg = os.path.join(base, "mcu_debug_mcp")
+          assert os.path.isdir(os.path.join(pkg, "knowledge")), "knowledge/ 没进包"
+          assert os.path.isdir(os.path.join(pkg, "drivers")), "drivers/ 没进包"
+          assert os.path.isdir(os.path.join(pkg, "tools")), "tools/ 没进包"
+          assert not os.path.exists(os.path.join(base, "core.py")), "顶层 core.py 污染 site-packages"
+          assert not os.path.exists(os.path.join(base, "tools")), "顶层 tools/ 污染 site-packages"
+          print("打包结构 OK：", pkg)
           PY

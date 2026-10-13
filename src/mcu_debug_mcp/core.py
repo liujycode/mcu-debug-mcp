@@ -28,17 +28,15 @@ try:
 except Exception:
     HAS_PYOCD = False
 
-sys_dir = os.path.dirname(os.path.abspath(__file__))
-if sys_dir not in os.sys.path:
-    os.sys.path.insert(0, sys_dir)
-# ★ sys_dir 只是**代码目录**：仅用于把同目录模块挂上 import 路径。
-#   知识库 / 驱动库 / 日志一律走 paths.* 定位（源码运行 = 这里，pip 安装 = 包目录）。
-#   历史坑：曾拿 sys_dir 当数据目录，于是 pip 装出来的包里没有 knowledge/drivers，
+# ★ 2026-10-13 C 档重构：src 正规包布局，包内绝对导入原生可用。
+#   平铺布局时代的「把自己目录插进 sys.path」hack 退役（os.sys.path 那两行删了）。
+#   知识库 / 驱动库 / 日志一律走 paths.* 定位（源码运行 = 包内，pip 安装 = 包内）。
+#   历史坑：曾拿代码目录当数据目录，于是 pip 装出来的包里没有 knowledge/drivers，
 #   知识类工具集体返回「空」——见 PLAN.md §2（N-01）。
 
-import analyzer  # noqa: E402
-import guard  # noqa: E402  —— 运行时隔离层（默认禁写硬件，见 guard.py）
-import paths  # noqa: E402  —— 数据根定位（代码目录 ≠ 数据目录）
+from mcu_debug_mcp import analyzer, guard, paths  # noqa: E402
+# analyzer —— 异常模式库；guard —— 运行时隔离层（默认禁写硬件，见 guard.py）；
+# paths —— 数据根定位（代码目录 ≠ 数据目录）
 
 # ---------------------------------------------------------------
 # 串口会话管理
@@ -6223,16 +6221,20 @@ def stack_unwind(path, frame=None, exc_return=None, sp=None):
 # ---------------------------------------------------------------
 
 def _pkg_version():
-    """本包版本：优先读安装元数据；源码运行时回退读 pyproject.toml。"""
+    """本包版本：安装元数据 > 包 ``__init__.__version__``。
+
+    2026-10-13 C 档重构后版本单一来源是 ``mcu_debug_mcp/__init__.py``，
+    pyproject 用 dynamic attr 从那读（源码树里 pyproject 不再写死版本，
+    也不再与模块同目录 —— 旧回退「读同目录 pyproject.toml」两个前提都塌了）。
+    """
     try:
         import importlib.metadata as md
         return md.version("mcu-debug-mcp")
     except Exception:
         pass
     try:
-        with open(os.path.join(paths.pkg_dir(), "pyproject.toml"), encoding="utf-8") as fh:
-            m = re.search(r'^version\s*=\s*"([^"]+)"', fh.read(), re.M)
-            return m.group(1) if m else "未知（源码运行）"
+        from mcu_debug_mcp import __version__ as v
+        return v
     except Exception:
         return "未知"
 

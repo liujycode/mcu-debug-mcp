@@ -21,18 +21,18 @@ import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "src"))
 
-import core  # noqa: E402
+from mcu_debug_mcp import core  # noqa: E402
 
 server = None
 try:
-    import server as _server  # noqa: E402
+    from mcu_debug_mcp import server as _server  # noqa: E402
     server = _server
 except Exception:                                    # pragma: no cover
     server = None
 
-KB = os.path.join(ROOT, "knowledge")
+KB = os.path.join(ROOT, "src", "mcu_debug_mcp", "knowledge")
 
 # 资源清单的**唯一权威口径**：改资源必须同时改这里，否则测试红。
 EXPECTED_STATIC = {
