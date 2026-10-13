@@ -94,7 +94,21 @@ TARGETS = [
      '                else:\n'
      '                    lsb, w = a, b',
      "tests/test_symbol_lookup.py::TestRegisterBitFieldParsing::test_bits_pos_width_form"),
+
+    ("M8 IAR 千位空格汇总读错大小", "src/mcu_debug_mcp/core.py",
+     '        m = re.match(r"\\s*((?:\\d[ \\d]*\\d|\\d))\\s+bytes\\s+of\\s+(readonly|readwrite)\\s+(\\S+)", line)\n        if m:\n            seg_map["%s_%s" % (m.group(2), m.group(3))] = {\n                "addr": 0, "size": int(m.group(1).replace(" ", ""))}',
+     '        m = re.match(r"\\s*(\\d+)\\s+bytes\\s+of\\s+(readonly|readwrite)\\s+(\\S+)", line)\n        if m:\n            seg_map["%s_%s" % (m.group(2), m.group(3))] = {\n                "addr": 0, "size": int(m.group(1))}',
+     "tests/test_artifact_parsers.py::TestIarMapParser::test_bytes_of_summary_lines"),
+    ("M9 ihex 校验和被跳过", "src/mcu_debug_mcp/core.py",
+     '        if (sum(b) & 0xFF) != 0:',
+     '        if False and (sum(b) & 0xFF) != 0:',
+     "tests/test_artifact_parsers.py::TestParseIhex::test_bad_checksum_rejected"),
+    ("M10 modbus 字节数不校验", "src/mcu_debug_mcp/core.py",
+     '        if n == 0 or n % 2 != 0 or n != len(regs):',
+     '        if False:',
+     "tests/test_diag_branches.py::TestModbusBranches::test_fc3_bytecount_mismatch_is_flagged"),
 ]
+
 
 
 def md5(p):

@@ -197,7 +197,7 @@ mcu-debug-mcp
 
 **Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式。
 
-## 验证状态（2026-10-13 复验，v4.5.4）
+## 验证状态（2026-10-13 复验，v4.5.5）
 
 | 模块 | 验证方式 | 状态 |
 |------|----------|------|
@@ -211,7 +211,7 @@ mcu-debug-mcp
 | server.py MCP 注册层（59 工具 + 16 resources + 6 prompts） | **真 MCP 客户端 stdio 握手实测**：`list_tools()`=59 · 静态 resources=8 · 模板 resources=8 | ✅ 本机实测通过 |
 | **MCP 协议层 + 资源层真机** | **16 个资源全部 `read_resource` 可读**（8 个模板资源 driver/wiring/component/pinmap/board/ecosystem/errcode/faultbits 逐项实测，9 款驱动逐个读）；查不存在的名字一律友好拒绝并列出可选项、不抛异常；`tests/test_mcp_resources.py` 17 条把资源清单精确锁死 | ✅ 本机实测通过 |
 | **符号反查 / 栈回溯（真工具链夹具）** | `tests/test_symbol_lookup.py` 用仓库自带的 `bridge_fw/main.c` + `linker.ld` **现场编译真 Cortex-M33 ELF**（复用 build.py 的工具链探测，不另写一套），与 `arm-none-eabi-readelf` 真值交叉核对：符号数/地址/大小逐一吻合；工具链缺失时整组 skip（CI 不红） | ✅ 本机实测通过 |
-| **离线全量（Python 全套 764 项）** | `python -m pytest tests -q`：**762 passed, 2 skipped**（两个 skip 都需显式授权：真机 USB CDC 用例，以及「该口不是 USB CDC」的对照用例；`tests/test_symbol_lookup.py` 里另有 25 条在无 ARM 工具链时整组 skip，本机装了 arm-none-eabi-gcc 全部实跑；收集总数由 `tests/audit_capability.py` 的 `pytest_collected` 探针机器锁定，手改数字会被审计抓出） | ✅ 本机实测通过 |
+| **离线全量（Python 全套 944 项）** | `python -m pytest tests -q`：**942 passed, 2 skipped**（两个 skip 都需显式授权：真机 USB CDC 用例，以及「该口不是 USB CDC」的对照用例；`tests/test_symbol_lookup.py` 里另有 25 条在无 ARM 工具链时整组 skip，本机装了 arm-none-eabi-gcc 全部实跑；收集总数由 `tests/audit_capability.py` 的 `pytest_collected` 探针机器锁定，手改数字会被审计抓出） | ✅ 本机实测通过 |
 | **隔离与安全（37 条）** | `tests/test_isolation.py`：档位/名单/不可逆确认/虚拟端口豁免/未登记操作 fail-closed，**含必须放行的反例**（离线打分、dry-run 预览、`loop://`）；另有静态对账与注入法反自证；并列 6 条守着`tools/live_acceptance.py`夹具自身（无端口拒跑、dry-run 不开口、DENY 不得设 `*`、收尾不得假 PASS、破坏关必须单独授权） | ✅ 本机实测通过 |
 | **排故链四工具（fault/map/符号/栈）** | tests/test_fault_chain.py：**67 项断言**，其中 30+ 条是「必须拒绝给结论」的假答案防线；**从零删掉 build_tmp 也能自举**（setUpModule 现场 gcc 生成夹具） | ✅ 本机实测通过 |
 | **真机验收夹具（N-15）** | `tools/live_acceptance.py` 在 **NUCLEO-H563ZI（STM32H563/Cortex-M33，板载 ST-Link V3EC 虚拟串口 COM21）** 上实跑：**PASS 16 · FAIL 0 · SKIP 1**；可反复跑不打死板子；破坏关单独授权后 **3/3 PASS** | ✅ 真机实测通过 |
@@ -317,7 +317,7 @@ mcu-debug-mcp/
 ├── setup.py            # 仅保留构建临时目录重定向（打包声明全在 pyproject.toml）
 ├── coverage.json       # 能力面清单（26 缺口 + 27 能力轴，审计脚本据此对账）
 ├── SECURITY.md         # 安全与隔离模型 + 破坏性操作矩阵 + 漏洞报告通道
-├── pyproject.toml      # src 布局 + include-package-data + console script（v4.5.4）
+├── pyproject.toml      # src 布局 + include-package-data + console script（v4.5.5）
 ├── MANIFEST.in         # sdist 收录清单（漏一行就复发「装出来是空壳」）
 ├── requirements.txt
 ├── examples/           # offline_demo.py：离线可跑的示例

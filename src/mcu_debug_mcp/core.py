@@ -5916,10 +5916,14 @@ def _parse_map_iar(text):
                                 "addr": int(m.group(2), 16),
                                 "size": int(m.group(3), 16)})
     # IAR 段汇总：  "  1234 bytes of readonly code memory"
+    # ★ IAR 真实输出带千位空格（"7 566 bytes of readonly code memory"）——
+    #   旧正则 (\d+)\s+bytes 只会吃到 "566"，前面那位数凭空丢掉：一份 7.5KB 的
+    #   固件被报成 566 字节。千位分隔必须先并回一个数。
     for line in text.split("\n"):
-        m = re.match(r"\s*(\d+)\s+bytes\s+of\s+(readonly|readwrite)\s+(\S+)", line)
+        m = re.match(r"\s*((?:\d[ \d]*\d|\d))\s+bytes\s+of\s+(readonly|readwrite)\s+(\S+)", line)
         if m:
-            seg_map["%s_%s" % (m.group(2), m.group(3))] = {"addr": 0, "size": int(m.group(1))}
+            seg_map["%s_%s" % (m.group(2), m.group(3))] = {
+                "addr": 0, "size": int(m.group(1).replace(" ", ""))}
     return {"format": "iar", "segments": seg_map, "symbols": symbols, "mem_regions": []}
 
 

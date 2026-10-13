@@ -27,3 +27,7 @@ __pycache__/
 .pytest_cache/
 .benchmarks/
 logs/
+
+# coverage 采集数据（tests/coverage.json 是能力审计清单，不是它）
+.coverage
+mcu_debug_mcp-*/

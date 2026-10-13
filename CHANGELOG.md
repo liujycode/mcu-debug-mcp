@@ -17,6 +17,29 @@
 
 ---
 
+## [4.5.5] - 2026-10-13
+
+### 新增（TEST_PLAN.md 批次 1-3：离线盲区清零）
+- **批次 1 产物解析器**：Keil/ARMCC `.map`（Image Symbol Table / 点号符号跳过 /
+  Total RO/RW/ROM 汇总）、IAR `.map`（ENTRY LIST / `--` 大小跳过 / bytes of 汇总）、
+  Intel HEX 严格解析 13 分支、`_firmware_segments` 三路输入，共 51 条测试。
+- **批次 2 诊断分支**：NMEA GSA/GSV/VTG/GLL/无校验段、Modbus 异常响应与各功能码
+  错误分支、`frame_parse` 切帧依据/垃圾数据/半包、`_timing_samples` 跨零点、
+  `decode_fault` 三类陷阱全分支 + **位号与 knowledge/fault_bits 对账表**、
+  `decode_register`/`decode_register_svd` 坏定义分支，共 93 条测试。
+- **批次 3 笼子内部逻辑**：`env_status` 降级分支（pyocd 缺 / 无烧录工具 / 知识库空 /
+  POSIX 权限 / 日志超量）、`logs_prune` 保留策略与闸门、`report_session` 数据来源 /
+  覆盖保护 / 闸门、`_port_baud_relevance` 端口类型、server.py 薄包装数量与转发对账，
+  共 36 条测试。
+
+### 修复
+- **IAR `.map` 千位空格汇总行读错大小**：真实输出 `7 566 bytes of readonly code memory`
+  的千位空格让旧正则只吃到 `566`——一份 7.5KB 固件被报成 566 字节。现先并回整数再解析。
+  （批次 1 测试当场抓出，写入变异 M8）
+
+### 变更
+- 离线测试总数 764 → **944**（`942 passed / 2 skipped`，含真机用例与工具链 skip 语义不变）。
+
 ## [Unreleased]
 
 ### 计划中
