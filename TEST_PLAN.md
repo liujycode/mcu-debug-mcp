@@ -18,6 +18,33 @@
 | 门禁 | — | **942 passed / 2 skipped**（收集 944）· C 107/0 · 变异 **10/10** · 知识库 0 · 常量 0 · 能力审计无脱节 · stdio 59/16/6 全过 |
 | 新发现（顺手记） | — | `paths.writable_root()` 有进程级缓存 `_write_root_cache`，同进程内改 `MCU_DEBUG_MCP_HOME` 不再生效——生产合理、测试必须 `paths.reset_cache()`；`server.logs_prune` 与 `core.logs_prune` 的 confirm/dry_run 参数序不同（关键字转发安全，位置调用会调包，测试已锁死按名转发） |
 
+### H2 真机批（2026-10-14 下午，H563ZI + 1 颗 I2C 器件 @ COM21，师兄接线确认无误）
+
+| 步骤 | 实测 | 结论 |
+|---|---|---|
+| 桥固件升级（v2→v5，`UNSTICK 打满9时钟` + `XBANG 交叉探测` + `PP 背充 hold_us` + GPIO READ 回复头修复） | 7,188 B ≤ 8 KB，live_check 5/6 PASS（i2c_scan 那关因器件钳位环境性 FAIL） | 固件诊断能力三项新增全部上板 |
+| 上电瞬态复现 | 烧录复位后 `I2C SCAN` → `-ERR TIMEOUT sda/scl stuck low`；而 `GPIO READ B` 线电平为高 | **I2C1 外设 BUSY 假死 vs 线电平矛盾** = 外设视角与 GPIO 视角必须分开看 |
+| SCL 电平漂移 | IDR 在 0x0219↔0x0319 间漂移（SCL 临界）；XBANG 双释放后纯上拉仍读低 | 中等强度拉低实锤（推挽顶得高、上拉顶不动） |
+| XBANG 交叉裁决 | 两线全高窗口内双极性各扫 112 地址：nA=0 nB=0 | **SDA/SCL 接反被否决**（接反则交叉档必 ACK） |
+| 9 时钟解卡 | `UNSTICK 9`（v4 修复后真打满 9 个，SDA 高场景不再 0 时钟空转）→ 器件不松口 | 器件不是"等时钟"状态 |
+| **背充实验** | `UNSTICK PP 500000`：推挽 SCL 高保持 0.5s 后钳位消失，SCL 回高且**持续保持**；SCAN 恢复 +OK（不再 TIMEOUT）但 **全 NAK** | **器件 VCC 轨欠压实锤**（上拉电流经 ESD 二极管背充器件 VCC，钳位临界漂移；背充电荷可暂顶掉钳位） |
+| 最终判定 | 总线健康 + 双极性 112 地址全 NAK + VCC 欠压钳位 + 背充可暂救总线但救不活器件 | **软件手段穷尽。器件 I2C 输入级未工作**；需师兄万用表三查：①器件 VCC 引脚电压（≥3.0V 正常）②桥 GND 与器件 GND 通断 ③仍不行换器件验证 |
+
+> 固件缺口发现链（真机驱动）：`UNSTICK` 原版「SDA 回高即 break」对「SCL 被钳/SDA 高」场景 0 时钟空转 → 打满 9；
+> `XBANG` 遇线低静默跳过 → 需在线高窗口跑；`SCAN` TIMEOUT 文案"stuck low"与 GPIO 读高矛盾 → 报错语义待细化（记录，未改）。
+
+### H2 全命令验证矩阵（2026-10-14 傍晚，v6 固件，师兄拍板：I2C 器件留到 ESP32 主板，先穷尽本板能力）
+
+| 项 | 结果 |
+|---|---|
+| 矩阵覆盖 | 49 用例 = 6 顶层命令（PING/I2C/SPI/OW/RS485/GPIO）× 正常路径 + 错误路径（17 个参数校验点逐个打） |
+| 结果 | **49/49 PASS**（脚本 `D:\work\_tmp\h2_full_matrix.py`，可复跑） |
+| **抓出真缺陷 #1** | `parse_hex_list` 不认 `0x` 前缀——usage 示例就是 `0x01,0x02,03`，但逐字符解析遇 'x' 直接 `bad byte list`，**示例输入必被拒**。修：元素头可选 `0x/0X`，与 `parse_num` 语义对齐。实测 `I2C WRITE 0 0x4A 0x00 0x11` 从 ARG 变 **NAK**（事务真实执行） |
+| **抓出不一致 #2** | `SPI SCAN` 扫 2 槽（CS0/CS1，PB0 已初始化），但 `SPI READ/WRITE` 对 `cs>0` 回 NOCS——**SCAN 声称有、READ/WRITE 拒收**。修：READ/WRITE 放行 CS1（`cs>1 → ARG`）。实测 CS1 读回全 1（MISO 悬空）、写动作 +OK |
+| I2C 外设行为补充 | `UNSTICK PP 500000` 背充清外设后，`I2C WRITE` 走 **NAK 路径**（非 TIMEOUT）——总线健康时 I2C1 事务正常，器件应答缺失是器件侧问题 |
+| live_check | 5/6 PASS（`i2c_scan` 关为器件钳位环境性 FAIL，非固件缺陷） |
+| 遗留 | ① `SCAN` TIMEOUT 文案与 GPIO 实测矛盾（报错语义待细化）② `XBANG` 线低时静默跳过（应输出 skip 计数）——均记录未改，等 ESP32 主板轮验证一并处理 |
+
 ---
 
 ## 〇、一句话结论

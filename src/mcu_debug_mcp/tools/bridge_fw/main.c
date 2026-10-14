@@ -562,6 +562,12 @@ static int parse_hex_list(const char *s, uint8_t *out, uint32_t max)
     for (;;) {
         uint32_t v = 0u;
         int digits = 0;
+        /* 可选 0x/0X 前缀：usage 示例就是 "0x01,0x02,03"，但原实现逐字符
+         * 解析遇 'x' 直接 return -1 —— 示例输入必被拒（2026-10-14 真机
+         * 矩阵抓出）。与 parse_num 的 0x 语义对齐。 */
+        if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+            s += 2;
+        }
         while (*s != '\0' && *s != ',') {
             char c = *s;
             uint32_t d;
@@ -665,6 +671,198 @@ static void handle_line(char *line)
         }
         if (bus != 0u) {
             reply_err("NOBUS", "only bus 0 is fitted");
+            return;
+        }
+
+        /* UNSTICK：SCL 补 9 个时钟把卡死的从机状态机顶出来（2026-10-14 真机
+         * 需求：IMU 上电即拉死 SDA，复位主控无效，必须从时钟侧解）。
+         * PB8(SCL) 切普通开漏输出打脉冲，PB9(SDA) 释放成输入观电平；
+         * SDA 一回高就停，最后补一个 STOP 时序（SCL 高时 SDA 0→1），恢复 AF4。
+         * 注意：若实际接线 SDA/SCL 互换，这里打的时钟会落到对端 SDA 上——
+         * 开漏数字信号，从机只会收到垃圾位不会损坏；先 GPIO READ B 看电平。 */
+        if (strcmp_local(argv[1], "UNSTICK") == 0u) {
+            /* PP 参数：推挽模式（otsyper 位8=0）。默认开漏：外部强拉时脉冲
+             * 打不出高，只能靠内部上拉（~40k）顶不动。推挽能强制驱动线——
+             * 用于区分「器件钳位/欠压（能顶高）」vs「硬短路到地（顶不高）」。
+             * 推挽顶短路电流受限自保护，短时诊断无损坏。 */
+            int push_pull = (argc >= 3 && strcmp_local(argv[2], "PP") == 0u);
+            uint32_t moder  = GPIOB->MODER;
+            uint32_t otyper = GPIOB->OTYPER;
+            /* PB8 → 输出(01)，清 AF；PB9 → 输入(00)。AFR 未动，无需保存 */
+            GPIOB->MODER = (moder & ~((3u << 16) | (3u << 18))) | (1u << 16);
+            if (push_pull) {
+                GPIOB->OTYPER &= ~(1u << 8);      /* PB8 推挽 */
+            }
+            uint32_t n = 0u;
+            /* 2026-10-14 H2 真机修订：原版「SDA 回高就 break」在「SCL 被钳、
+             * SDA 一直高」场景 0 个时钟就退出（时钟根本没打进器件）。
+             * 标准解卡就该打满 9 个——SDA 高时多打无害，SCL 钳位场景必须
+             * 打满（PP 档推挽能把时钟真送进去）。 */
+            for (n = 0u; n < 9u; n++) {
+                GPIOB->BSRR = (1u << 8);          /* SCL 高（开漏：置位=释放） */
+                udelay(5u);
+                GPIOB->BSRR = (1u << (8 + 16u));  /* SCL 低 */
+                udelay(5u);
+            }
+            /* STOP 时序：SCL 高电平期间 SDA 从低到高 */
+            GPIOB->BSRR      = (1u << (8 + 16u)); /* SCL 低 */
+            GPIOB->MODER     = (GPIOB->MODER & ~(3u << 18)) | (1u << 18);
+            GPIOB->BSRR      = (1u << (9 + 16u)); /* SDA 低 */
+            udelay(5u);
+            GPIOB->BSRR      = (1u << 8);         /* SCL 高 */
+            /* 背充实验（2026-10-14 H2）：PP 档可加 hold_us——SCL 推挽保持
+             * 高电平，往欠压的器件 VCC 轨（经 ESD 二极管）灌电；若器件
+             * VCC 虚接全靠上拉背充活着，灌几百 ms 后器件输入级起振、
+             * 总线钳位消失。仅 PP 档有意义（开漏顶不动钳位）。 */
+            uint32_t hold_us = 5u;
+            if (push_pull && argc >= 4) {
+                (void)parse_num(argv[3], &hold_us);
+                if (hold_us > 500000u) {
+                    hold_us = 500000u;            /* 上限 0.5s，防长时间灌流 */
+                }
+            }
+            udelay(hold_us);
+            GPIOB->BSRR      = (1u << 9);         /* SDA 释放→高 = STOP */
+            udelay(5u);
+            /* 恢复 AF **之前**读电平：推挽模式下若 SCL 能顶到高（vs 外部强拉），
+             * 只有此刻能看出来——恢复 AF（开漏+上拉）后线会被重新拉低，看不出差别 */
+            uint32_t scl_driven = (GPIOB->IDR >> 8) & 1u;
+            GPIOB->MODER = moder;                 /* 原样恢复（PB8/PB9 AF4） */
+            GPIOB->OTYPER = otyper;
+            out_reset();
+            out_add_u(n);
+            out_add_str(" sda_now=");
+            out_add_u((GPIOB->IDR >> 9) & 1u);
+            out_add_str(" scl_released=");
+            /* 1=推挽/上拉能拉回高（弱拉低：器件钳位/欠压），
+             * 0=外部仍然强拉（硬短路到地） */
+            out_add_u(scl_driven);
+            reply_ok("UNSTICK");
+            return;
+        }
+
+        /* XBANG：交叉探测（2026-10-14 H2 真机需求）。硬件 I2C 外设的 SCL/SDA
+         * 角色是 PB8/PB9 固定的——若实际接线把两根线接反，地址位全错位，
+         * SCAN 永远 NAK 且无从分辨。这里用 GPIO 位摔在两个极性下各扫一遍：
+         *   极性 A：PB8=SCL  PB9=SDA（与硬件外设一致）
+         *   极性 B：PB9=SCL  PB8=SDA（交叉）
+         * 只发 START+addr(RD)+ACK 采样+STOP，不收数据，开漏+内部上拉，
+         * 对从机无破坏。判读：
+         *   A 有 ACK / B 全 NAK → 接线正，器件地址见 a=
+         *   B 有 ACK / A 全 NAK → SDA/SCL 接反实锤，换线即可
+         *   两极性全 NAK        → 器件不在位/未上电/非标准应答 */
+        if (strcmp_local(argv[1], "XBANG") == 0u) {
+            /* 开漏位摔探测：scl/sda 为 BSRR 位掩码。返回 1=ACK 0=NAK -1=死 */
+            uint32_t hits_a = 0u, hits_b = 0u;
+            uint8_t  la[112], lb[112];
+
+            /* 两线切开漏输出（AFR/OTYPER/PUPDR 不动，上拉保持生效） */
+            uint32_t moder_sv = GPIOB->MODER;
+            GPIOB->MODER = (moder_sv & ~((3u << 16) | (3u << 18)))
+                           | ((1u << 16) | (1u << 18));
+            GPIOB->BSRR = (1u << 8) | (1u << 9);   /* 先双释放 */
+            udelay(5u);
+
+            for (uint32_t a = 8u; a <= 0x77u; a++) {
+                for (uint32_t pol = 0u; pol < 2u; pol++) {
+                    uint32_t m_scl = (pol == 0u) ? (1u << 8) : (1u << 9);
+                    uint32_t m_sda = (pol == 0u) ? (1u << 9) : (1u << 8);
+                    int      ack   = 0;
+                    /* 总线任一线被外部拉低 → 本极性作废 */
+                    if (((GPIOB->IDR & (m_scl | m_sda))
+                         != (m_scl | m_sda))) {
+                        continue;
+                    }
+                    /* START：SDA 低 → SCL 低 */
+                    GPIOB->BSRR = m_sda;
+                    udelay(5u);
+                    GPIOB->BSRR = m_scl;
+                    udelay(5u);
+                    /* 8 bit：MSB 先，SCL 低放数据、SCL 高采样 */
+                    for (int32_t i = 7; i >= 0; i--) {
+                        if ((a >> i) & 1u) {
+                            GPIOB->BSRR = m_sda;       /* 1 = 释放 */
+                        } else {
+                            GPIOB->BSRR = m_sda << 16; /* 0 = 拉低 */
+                        }
+                        udelay(4u);
+                        GPIOB->BSRR = m_scl;           /* SCL 高 */
+                        udelay(5u);
+                        GPIOB->BSRR = m_scl << 16;     /* SCL 低 */
+                        udelay(4u);
+                    }
+                    /* 第 9 位：释放 SDA 读 ACK（0=从机应答） */
+                    GPIOB->BSRR = m_sda;
+                    udelay(4u);
+                    GPIOB->BSRR = m_scl;
+                    udelay(5u);
+                    ack = ((GPIOB->IDR & m_sda) == 0u);
+                    GPIOB->BSRR = m_scl << 16;
+                    udelay(4u);
+                    /* STOP：SDA 低 → SCL 高 → SDA 高 */
+                    GPIOB->BSRR = m_sda << 16;
+                    udelay(4u);
+                    GPIOB->BSRR = m_scl;
+                    udelay(5u);
+                    GPIOB->BSRR = m_sda;
+                    udelay(5u);
+                    if (pol == 0u) {
+                        if (ack) {
+                            la[hits_a++] = (uint8_t)a;
+                        }
+                    } else {
+                        if (ack) {
+                            lb[hits_b++] = (uint8_t)a;
+                        }
+                    }
+                }
+            }
+            GPIOB->MODER = moder_sv;                   /* 恢复 AF4 */
+            /* I2C1 软复位：位摔期间外设与引脚断开，防 BUSY 卡死殃及 SCAN */
+            I2C1->CR1 &= ~X_I2C_PE;
+            udelay(20u);
+            I2C1->TIMINGR = (3u << 28) | (4u << 20) | (0u << 16)
+                            | (74u << 8) | 74u;
+            I2C1->CR1 |= X_I2C_PE;
+
+            out_reset();
+            {
+                /* 恢复 AF 后实测电平：区分「SCL 低=外设自锁」vs「外部钳位」——
+                 * 外设刚软复位还 SCL 低 = 外部真有东西在拉（欠压钳位特征） */
+                uint32_t v = GPIOB->IDR;
+                char     hx[5];
+                hx[0] = HEXC[(v >> 12) & 0xFu];
+                hx[1] = HEXC[(v >> 8) & 0xFu];
+                hx[2] = HEXC[(v >> 4) & 0xFu];
+                hx[3] = HEXC[v & 0xFu];
+                hx[4] = '\0';
+                out_add_str("idr=0x");
+                out_add_str(hx);
+                out_add_str(" ");
+            }
+            out_add_str("nA=");
+            out_add_u(hits_a);
+            if (hits_a != 0u) {
+                out_add_str(" a=");
+                for (uint32_t i = 0u; i < hits_a; i++) {
+                    if (i != 0u) {
+                        out_add_str(",");
+                    }
+                    out_add_hex8(la[i]);
+                }
+            }
+            out_add_str(" nB=");
+            out_add_u(hits_b);
+            if (hits_b != 0u) {
+                out_add_str(" b=");
+                for (uint32_t i = 0u; i < hits_b; i++) {
+                    if (i != 0u) {
+                        out_add_str(",");
+                    }
+                    out_add_hex8(lb[i]);
+                }
+            }
+            reply_ok("I2C XBANG");
             return;
         }
 
@@ -832,8 +1030,8 @@ static void handle_line(char *line)
                 reply_err("ARG", "usage: SPI READ <bus> <cs> <cmd> <n>");
                 return;
             }
-            if (cs > 0u) {
-                reply_err("NOCS", "cs slot not fitted");
+            if (cs > 1u) {
+                reply_err("ARG", "cs must be 0 or 1");
                 return;
             }
             uint8_t data[256];
@@ -870,8 +1068,8 @@ static void handle_line(char *line)
                 reply_err("ARG", "usage: SPI WRITE <bus> <cs> <cmd> <b0[,b1..]>");
                 return;
             }
-            if (cs > 0u) {
-                reply_err("NOCS", "cs slot not fitted");
+            if (cs > 1u) {
+                reply_err("ARG", "cs must be 0 or 1");
                 return;
             }
             uint8_t vals[256];
@@ -950,6 +1148,46 @@ static void handle_line(char *line)
     if (strcmp_local(argv[0], "RS485") == 0) {
         /* 本板没收发器 —— 如实拒绝。装了 MAX485 的话在这里补 DE 时序即可 */
         reply_err("NOBUS", "rs485 transceiver not fitted on this bridge");
+        return;
+    }
+
+    /* ---------- GPIO：读引脚电平（总线诊断；IDR 与模式无关，总反映实际电平） ---------- */
+    if (strcmp_local(argv[0], "GPIO") == 0u) {
+        if (argc < 3 || strcmp_local(argv[1], "READ") != 0u) {
+            reply_err("ARG", "usage: GPIO READ <A|B|C|D|E>");
+            return;
+        }
+        GPIO_TypeDef *g = (GPIO_TypeDef *)0;
+        switch (argv[2][0]) {
+        case 'A': case 'a': g = GPIOA; break;
+        case 'B': case 'b': g = GPIOB; break;
+        case 'C': case 'c': g = GPIOC; break;
+        case 'D': case 'd': g = GPIOD; break;
+        case 'E': case 'e': g = GPIOE; break;
+        default:
+            reply_err("ARG", "port must be A..E");
+            return;
+        }
+        /* 修复：回复头原写死 "GPIO B"——读 A/C/D/E 时头也是 B，误导诊断 */
+        {
+            char     head[12];
+            uint32_t v = g->IDR;
+            char     hx[5];
+            head[0] = 'G'; head[1] = 'P'; head[2] = 'I'; head[3] = 'O';
+            head[4] = ' '; head[5] = argv[2][0]; head[6] = '\0';
+            if (head[5] >= 'a' && head[5] <= 'z') {
+                head[5] = (char)(head[5] - 'a' + 'A');
+            }
+            hx[0] = HEXC[(v >> 12) & 0xFu];
+            hx[1] = HEXC[(v >> 8) & 0xFu];
+            hx[2] = HEXC[(v >> 4) & 0xFu];
+            hx[3] = HEXC[v & 0xFu];
+            hx[4] = '\0';
+            out_reset();
+            out_add_str("IDR=0x");
+            out_add_str(hx);
+            reply_ok(head);
+        }
         return;
     }
 

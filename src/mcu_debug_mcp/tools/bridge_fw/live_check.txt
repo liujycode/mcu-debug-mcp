@@ -1,5 +1,7 @@
 ================================================================
 【1】编译
+== 工具链: C:\Users\ljyit\AppData\Local\stm32cube\bundles\gnu-tools-for-stm32\14.3.1+st.2\bin
+== CMSIS : D:/work\2-IMU\12-LCD\LCD_Voice_f103\Drivers\CMSIS\Core\Include
 == gcc rc=0 ==
 
 
@@ -8,16 +10,16 @@
 
 == size ==
    text	   data	    bss	    dec	    hex	filename
-   5864	      0	   1848	   7712	   1e20	D:\work\ls\mcu-debug-mcp\tools\bridge_fw\fw.elf
+   7196	      0	   1848	   9044	   2354	D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\fw.elf
 
-== bin size = 5864 bytes ==
+== bin size = 7196 bytes ==
 （扇区 0 = 8KB：只要 bin 不超过 8192 字节，烧进 0x08000000 就不会
   越界到别的内容；用 live_check.py 烧录，它会先核对这条。）
 
-fw.bin = 5864 字节
+fw.bin = 7196 字节
 
 【2】烧录桥固件到 0x08000000
-$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\ls\mcu-debug-mcp\tools\bridge_fw\fw.bin 0x08000000 -v -rst
+$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\fw.bin 0x08000000 -v -rst
         -------------------------------------------------------------------
                          STM32CubeProgrammer v2.21.0
         -------------------------------------------------------------------
@@ -40,7 +42,7 @@ $ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\ls\mcu-de
   Opening and parsing file: fw.bin
   Memory Programming ...
     File          : fw.bin
-    Size          : 5.73 KB
+    Size          : 7.03 KB
     Address       : 0x08000000
   Erasing memory corresponding to segment 0:
   Erasing internal memory sector 0
@@ -49,7 +51,7 @@ $ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\ls\mcu-de
   Time elapsed during download operation: 00:00:00.077
   Verifying...
   Read progress:
-  Time elapsed during verifying operation: 00:00:00.023
+  Time elapsed during verifying operation: 00:00:00.025
   Download verified successfully
   MCU Reset
   Software reset is performed
@@ -68,18 +70,9 @@ $ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\ls\mcu-de
   桥活着、认协议。下一步再怀疑接线和器件。
 ----------------------------------------------------------------
 【3.2 i2c_scan】
-I2C 扫描（bus=0　桥：NUCLEO-H563ZI）
-  扫描范围   : 0x08–0x77（共 112 个地址）
-  应答器件   : 0 个
-
-  一个都没有。按这个次序查（从最常见开始）：
-    1) 器件上电了吗（量 VCC；很多模块要 3.3V 而不是 5V）
-    2) SDA/SCL 有没有接反、有没有接上（这是最常见的）
-    3) 上拉电阻在不在（4.7k 到 VCC；缺了会一个都扫不到）
-    4) 是不是走了 I2C 多路复用器（如 TCA9548A）：
-       多路复用器后面的器件**默认是断开的**，必须先给它写通道选择字，
-       所以直接扫主总线只能看到复用器自己（0x70–0x77），看不到后面那 8 路。
-    5) 共地了吗
+桥拒绝了这条命令：-ERR TIMEOUT sda/scl stuck low (bus busy)
+  ⓘ 总线超时。常见原因是 SDA 或 SCL 被某个器件**拉死在低电平**（总线卡死）—— 典型场景是主控在从设备发字节的中途复位。处置：断电重新上电，或在 SCL 上补 9 个时钟把从设备的状态机顶出来。
+  （命令：I2C SCAN 0 8 119）
 ----------------------------------------------------------------
 【3.3 spi_scan】
 SPI 扫描（逐 CS 读 JEDEC ID 0x9F）（bus=0　桥：NUCLEO-H563ZI）
@@ -119,81 +112,14 @@ SPI 读（bus=0　桥：NUCLEO-H563ZI）
   （命令：RS485 SEND 0 2.0 48656c6c6f）
 
 ================================================================
-【4】恢复原始固件（D:\work\_tmp\h563_probe_fw\orig_sector0.bin）
-$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\_tmp\h563_probe_fw\orig_sector0.bin 0x08000000 -v -rst
-        -------------------------------------------------------------------
-                         STM32CubeProgrammer v2.21.0
-        -------------------------------------------------------------------
-  ST-LINK SN  : 0046001C3234511737333934
-  ST-LINK FW  : V3J10M3
-  Board       : NUCLEO-H563ZI
-  Voltage     : 3.28V
-  SWD freq    : 8000 KHz
-  Connect mode: Normal
-  Reset mode  : Software reset
-  Device ID   : 0x484
-  Revision ID : Rev X
-  Device name : STM32H56x/573
-  Flash size  : 2 MBytes
-  Device type : MCU
-  Device CPU  : Cortex-M33
-  BL Version  : 0xE4
-  SFSP Version: v2.5.0
-  Debug in Low Power mode enabled
-  Opening and parsing file: orig_sector0.bin
-  Memory Programming ...
-    File          : orig_sector0.bin
-    Size          : 8.00 KB
-    Address       : 0x08000000
-  Erasing memory corresponding to segment 0:
-  Erasing internal memory sector 0
-  Download in Progress:
-  File download complete
-  Time elapsed during download operation: 00:00:00.083
-  Verifying...
-  Read progress:
-  Time elapsed during verifying operation: 00:00:00.027
-  Download verified successfully
-  MCU Reset
-  Software reset is performed
-  (rc=0)
-$ STM32_Programmer_CLI -c port=SWD mode=normal -u 0x08000000 8192 D:\work\ls\mcu-debug-mcp\tools\bridge_fw\restore_readback.bin
-        -------------------------------------------------------------------
-                         STM32CubeProgrammer v2.21.0
-        -------------------------------------------------------------------
-  ST-LINK SN  : 0046001C3234511737333934
-  ST-LINK FW  : V3J10M3
-  Board       : NUCLEO-H563ZI
-  Voltage     : 3.27V
-  SWD freq    : 8000 KHz
-  Connect mode: Normal
-  Reset mode  : Software reset
-  Device ID   : 0x484
-  Revision ID : Rev X
-  Device name : STM32H56x/573
-  Flash size  : 2 MBytes
-  Device type : MCU
-  Device CPU  : Cortex-M33
-  BL Version  : 0xE4
-  SFSP Version: v2.5.0
-  Debug in Low Power mode enabled
-  UPLOADING ...
-    File          : D:\work\ls\mcu-debug-mcp\tools\bridge_fw\restore_readback.bin
-    Size          : 8192 Bytes
-    Address:      : 0x8000000
-  Read progress:
-  Data read successfully
-  Warning: The file restore_readback.bin already exists, it will be overwritten
-  Time elapsed during read operation is: 00:00:00.028
-  (rc=0)
-恢复回读 md5 df49003ae961e49acc192f73c590a91d（期望 df49003ae961e49acc192f73c590a91d）→ 一致 ✓
+【4】跳过恢复（--no-restore）：桥固件留在板上
 
 ================================================================
 验证汇总：
   [PASS] bridge_probe 协议握手
-  [PASS] i2c_scan 空总线=有效结论
+  [FAIL] i2c_scan 空总线=有效结论
   [PASS] spi_scan 两条 CS 都无器件
   [PASS] spi_read 读回全 1（MISO 悬空）
   [PASS] onewire_scan 无器件
   [PASS] rs485_send 桥如实回 -ERR NOBUS
-结论：桥链路真机全通 ✓
+结论：有失败项 ✗
