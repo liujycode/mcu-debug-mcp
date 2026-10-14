@@ -183,19 +183,42 @@ mcu-debug-mcp
 
 ## 客户端配置
 
-**WorkBuddy**（连接器管理 → 自定义 MCP → 信任后生效）：
+### WorkBuddy（三步上手）
+
+**第 1 步：装包**（本机需有 Python 3.10+；没有就让 WorkBuddy 代装，见下方提示词）
+
+```bash
+pip install "mcu-debug-mcp[all]"
+```
+
+**第 2 步：配连接器**（连接器 → 自定义连接器 → 配置 MCP → 粘贴 → 保存）：
+
 ```json
 {
   "mcpServers": {
     "mcu-debug-mcp": {
       "command": "python",
-      "args": ["<本项目路径>/server.py"]
+      "args": ["-m", "mcu_debug_mcp.server"]
     }
   }
 }
 ```
 
-**Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式。
+> 若 `python` 不在 PATH，把 `command` 换成 python.exe 全路径；
+> 或改用 console script：`"command": "mcu-debug-mcp.exe"` 的全路径
+> （pip --user 安装在 `%APPDATA%\Python\Python312\Scripts\`，全局安装在 Python 目录的 `Scripts\`）。
+
+**第 3 步：Trust 信任**（连接器列表点「信任」启用）→ 新开任务说"列出 mcu-debug-mcp 下的所有工具"验证。
+
+### 让 WorkBuddy 代装（复制这段发给 WorkBuddy 即可）
+
+```text
+帮我安装 mcu-debug-mcp：执行 pip install "mcu-debug-mcp[all]"，
+装好后把 {"mcpServers": {"mcu-debug-mcp": {"command": "python",
+"args": ["-m", "mcu_debug_mcp.server"]}}} 写入 MCP 配置并告诉我如何 Trust 启用。
+```
+
+**Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式（`python -m mcu_debug_mcp.server`）。
 
 ## 验证状态（2026-10-13 复验，v4.5.5）
 

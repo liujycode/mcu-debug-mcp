@@ -32,7 +32,7 @@ classifiers = [
 # ★ 下界与 requirements.txt 对齐（2026-10-13 审查：两处曾一个写 1.0 一个写 1.2.0，
 #   装出来的版本行为不一致；mcp 2.x 改了 FastMCP 入口名，实测炸 server.py，故钉 <2 语义由
 #   tests/test_server_smoke 类守护——升级前先跑它）
-dependencies = ["mcp>=1.2.0"]
+dependencies = ["mcp>=1.2.0,<2"]
 
 [project.urls]
 Homepage = "https://github.com/liujycode/mcu-debug-mcp"
