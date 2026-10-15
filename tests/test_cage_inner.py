@@ -210,7 +210,10 @@ class TestLogsPrune(_EnvHome):
         self.assertEqual(len([f for f in os.listdir(logs) if f.endswith(".log")]), 5)
 
     def test_keep_days_zero_drops_everything(self):
-        logs = self._mk_logs(3)
+        # ★ mtime 必须显式回拨：NTFS mtime 转 float 可能比 time.time() 大几微秒，
+        #   刚写的文件在 keep_days=0 下会被判「最近 0 天内」而保留（宁少删不多删的
+        #   正确行为），裸写会踩亚毫秒时序 flaky——曾致 publish 门禁误红一次。
+        logs = self._mk_logs(3, mtime_offset=1)
         with mock.patch.object(core, "_logs_dir", return_value=logs):
             out = core.logs_prune(keep_days=0)
         self.assertIn("待清理   : 3 个", out)
