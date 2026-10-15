@@ -17,6 +17,31 @@
 
 ---
 
+## [4.6.0] - 2026-10-15
+
+### 新增
+- **MCUDBG/1 桥固件 v6**（H563ZI 真机 49/49 矩阵验证）：
+  - `I2C XBANG` 双极性位摔交叉探测——裁决 SDA/SCL 接反（正极性命中 vs 交叉极性全 NAK）
+  - `I2C UNSTICK` 改为打满 9 时钟（旧版 SDA 回高即 break，SCL 被钳场景 0 时钟空转）；
+    `PP <hold_us>` 推挽背充档（欠压器件灌电实验，实锤"器件 VCC 轨欠压"诊断）
+  - SCAN/READ/WRITE 报错附 GPIO 实测电平（外设 BUSY 与线电平矛盾一眼可判）
+  - XBANG 输出 skip 计数，"全 NAK"与"线低没探到"可区分
+- **ESP32-S3 移植版桥固件 v1.0**（独立副本 `_tmp/esp32s3_bridge/`）：
+  SCAN TCA 全 8 端口遍历 / I2C RAW 流式直读（SHTP 器件）/ GPIO 0-48，
+  45 用例矩阵全 PASS；bq27421 DeviceID 0x0421 事务级闭环、BNO080 SHTP 头读通
+- `publish.py` 一键发布（test/prod 两阶段：脏树门禁→全量测试→干净重建→twine check→
+  干净 venv 用户视角握手→凭据预检→上传）；`tools_ci/mcp_handshake_check.py`
+- `.pypirc.template`（token 永不进 git）
+
+### 修复
+- 依赖钉 `mcp>=1.2.0,<2`：mcp 2.x 已把 FastMCP 改名 MCPServer，无上限会让新用户
+  `pip install` 直接起不来（干净 venv 实测抓出）
+- README 客户端配置节重写为 WorkBuddy 三步上手，删掉平铺时代 `server.py` 死路径
+- 测试：`keep_days=0` 冒烟踩 NTFS mtime 亚毫秒竞态（显式回拨 1s 后连跑三轮全绿）
+
+### 变更
+- 离线测试 942 passed / 2 skipped（H2 真机批与发布链路验证期间各加若干）
+
 ## [4.5.5] - 2026-10-13
 
 ### 新增（TEST_PLAN.md 批次 1-3：离线盲区清零）
