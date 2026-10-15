@@ -96,7 +96,14 @@ def main():
         print("[X] 握手验收未过")
         sys.exit(1)
 
-    # 6) 上传
+    # 6) 凭据预检（无 .pypirc 时 twine 会交互式等输入而挂死 CI）
+    pypirc = os.path.join(os.path.expanduser("~"), ".pypirc")
+    if not os.path.isfile(pypirc):
+        print("[X] 缺凭据：复制 .pypirc.template 到 %s 并填入 token 后重试" % pypirc)
+        print("[i] 门前所有验收（测试/构建/元数据/用户视角握手）已全部通过——只差这一步")
+        sys.exit(1)
+
+    # 7) 上传
     if stage == "test":
         ok, _ = run([PY, "-m", "twine", "upload",
                      "--repository-url", "https://test.pypi.org/legacy/",
@@ -111,7 +118,7 @@ def main():
         print("[X] 上传失败")
         sys.exit(1)
 
-    # 7) 上传后验证（pypi.org 数据有延迟，几分钟后可再查）
+    # 8) 上传后验证（pypi.org 数据有延迟，几分钟后可再查）
     url = ("https://test.pypi.org/project/mcu-debug-mcp/%s/" % ver) if stage == "test" \
         else ("https://pypi.org/project/mcu-debug-mcp/%s/" % ver)
     print("[OK] 发布完成，页面：%s" % url)
