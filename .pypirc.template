@@ -1,0 +1,18 @@
+# PyPI API token 配置模板（2026-10-15）
+# 用法：复制到 %USERPROFILE%\.pypirc（即 C:\Users\<你>\.pypirc），替换两处 <TOKEN>
+# token 获取：pypi.org 与 test.pypi.org 各自账号 -> Account settings -> API tokens
+# 安全：.pypirc 含真实凭据，永远不进 git（本仓库 .gitignore 已含 .pypirc）
+
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+username = __token__
+password = pypi-<TOKEN>
+
+[testpypi]
+repository = https://test.pypi.org/legacy/
+username = __token__
+password = pypi-<TESTPYPI_TOKEN>

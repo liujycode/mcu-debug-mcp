@@ -31,3 +31,7 @@ logs/
 # coverage 采集数据（tests/coverage.json 是能力审计清单，不是它）
 .coverage
 mcu_debug_mcp-*/
+
+# PyPI 发布（token 永不进 git）
+.pypirc
+.publish_venv/
