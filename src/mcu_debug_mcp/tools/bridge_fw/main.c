@@ -754,6 +754,7 @@ static void handle_line(char *line)
         if (strcmp_local(argv[1], "XBANG") == 0u) {
             /* 开漏位摔探测：scl/sda 为 BSRR 位掩码。返回 1=ACK 0=NAK -1=死 */
             uint32_t hits_a = 0u, hits_b = 0u;
+            uint32_t skip   = 0u;                  /* 线低作废的探测数 */
             uint8_t  la[112], lb[112];
 
             /* 两线切开漏输出（AFR/OTYPER/PUPDR 不动，上拉保持生效） */
@@ -768,9 +769,11 @@ static void handle_line(char *line)
                     uint32_t m_scl = (pol == 0u) ? (1u << 8) : (1u << 9);
                     uint32_t m_sda = (pol == 0u) ? (1u << 9) : (1u << 8);
                     int      ack   = 0;
-                    /* 总线任一线被外部拉低 → 本极性作废 */
+                    /* 总线任一线被外部拉低 → 本极性作废（计入 skip，
+                     * 全 NAK 与「根本没探到」两种结果必须可区分） */
                     if (((GPIOB->IDR & (m_scl | m_sda))
                          != (m_scl | m_sda))) {
+                        skip++;
                         continue;
                     }
                     /* START：SDA 低 → SCL 低 */
@@ -862,6 +865,11 @@ static void handle_line(char *line)
                     out_add_hex8(lb[i]);
                 }
             }
+            out_add_str(" skip=");
+            out_add_u(skip);
+            if (skip != 0u) {
+                out_add_str(" (wire low, result partial)");
+            }
             reply_ok("I2C XBANG");
             return;
         }
@@ -892,7 +900,16 @@ static void handle_line(char *line)
                 }
             }
             if (stuck) {
-                reply_err("TIMEOUT", "sda/scl stuck low (bus busy)");
+                /* 外设视角 BUSY 与 GPIO 视角线电平可能矛盾（欠压钳位时
+                 * GPIO 读高但外设起不来）——两个视角一起报，别只信一个。 */
+                uint32_t idr    = GPIOB->IDR;
+                unsigned sda_lv = (idr >> 9) & 1u;
+                unsigned scl_lv = (idr >> 8) & 1u;
+                uart_puts("-ERR TIMEOUT i2c busy (gpio sda=");
+                uart_putc('0' + (char)sda_lv);
+                uart_puts(" scl=");
+                uart_putc('0' + (char)scl_lv);
+                uart_puts(")\r\n");
                 return;
             }
             out_reset();

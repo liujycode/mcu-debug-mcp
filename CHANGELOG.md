@@ -42,6 +42,21 @@
 
 ## [Unreleased]
 
+### 发布准备（2026-10-15）
+
+- **打包**：依赖钉 `mcp>=1.2.0,<2`——mcp 2.x 已把 FastMCP 改名 MCPServer，
+  无上限会让新用户 `pip install` 直接起不来（干净 venv 实测抓出，提交 36faa41）
+- **发布自动化**：`publish.py`（test/prod 两阶段：脏树门禁→全量测试→干净重建→
+  twine check→干净 venv 用户视角握手→凭据预检→上传）；`.pypirc.template`；
+  `tools_ci/mcp_handshake_check.py`（59/8/8/6 标准握手断言）（提交 2fa41d4）
+- **测试稳定性**：`keep_days=0` 冒烟裸写踩 NTFS mtime 亚毫秒竞态（生产语义
+  「宁少删不多删」正确），显式回拨 1s 后连跑三轮 942 passed/2 skipped 全绿（4e89d01）
+- **README**：客户端配置节重写为 WorkBuddy 三步上手 + AI 代装提示词，
+  删掉平铺时代 `<项目路径>/server.py` 死路径
+- **桥固件**（7352B，真机待烧）：SCAN TIMEOUT 报错附 GPIO 实测电平
+  （消除「外设 BUSY vs 线读高」双视角矛盾）；XBANG 输出 skip 计数，
+  「全 NAK」与「线低没探到」从此可区分
+
 ### 计划中
 见 `PLAN.md`（唯一待办权威）与 `coverage.json`（机器可读的能力面清单）。
 跑 `python tests/audit_capability.py` 可一条命令列出全部缺口与当前深度。
