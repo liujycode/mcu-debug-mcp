@@ -10,13 +10,43 @@
 
 == size ==
    text	   data	    bss	    dec	    hex	filename
-   7196	      0	   1848	   9044	   2354	D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\fw.elf
+   7352	      0	   1848	   9200	   23f0	D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\fw.elf
 
-== bin size = 7196 bytes ==
+== bin size = 7352 bytes ==
 （扇区 0 = 8KB：只要 bin 不超过 8192 字节，烧进 0x08000000 就不会
   越界到别的内容；用 live_check.py 烧录，它会先核对这条。）
 
-fw.bin = 7196 字节
+fw.bin = 7352 字节
+【2】先 upload 原扇区 0 → C:\Users\ljyit\AppData\Local\Temp\mcudbg_orig_sector0.bin（烧录前做；备不好就不烧）
+$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -u 0x08000000 8192 C:\Users\ljyit\AppData\Local\Temp\mcudbg_orig_sector0.bin
+        -------------------------------------------------------------------
+                         STM32CubeProgrammer v2.21.0
+        -------------------------------------------------------------------
+  ST-LINK SN  : 0046001C3234511737333934
+  ST-LINK FW  : V3J10M3
+  Board       : NUCLEO-H563ZI
+  Voltage     : 3.27V
+  SWD freq    : 8000 KHz
+  Connect mode: Normal
+  Reset mode  : Software reset
+  Device ID   : 0x484
+  Revision ID : Rev X
+  Device name : STM32H56x/573
+  Flash size  : 2 MBytes
+  Device type : MCU
+  Device CPU  : Cortex-M33
+  BL Version  : 0xE4
+  SFSP Version: v2.5.0
+  Debug in Low Power mode enabled
+  UPLOADING ...
+    File          : C:\Users\ljyit\AppData\Local\Temp\mcudbg_orig_sector0.bin
+    Size          : 8192 Bytes
+    Address:      : 0x8000000
+  Read progress:
+  Data read successfully
+  Time elapsed during read operation is: 00:00:00.027
+  (rc=0)
+  备份完成（md5=b3125ddb6fb0933067fd811e69b4e8a3）
 
 【2】烧录桥固件到 0x08000000
 $ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\fw.bin 0x08000000 -v -rst
@@ -42,13 +72,13 @@ $ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\.dev\ls\m
   Opening and parsing file: fw.bin
   Memory Programming ...
     File          : fw.bin
-    Size          : 7.03 KB
+    Size          : 7.18 KB
     Address       : 0x08000000
   Erasing memory corresponding to segment 0:
   Erasing internal memory sector 0
   Download in Progress:
   File download complete
-  Time elapsed during download operation: 00:00:00.077
+  Time elapsed during download operation: 00:00:00.087
   Verifying...
   Read progress:
   Time elapsed during verifying operation: 00:00:00.025
@@ -70,7 +100,7 @@ $ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w D:\work\.dev\ls\m
   桥活着、认协议。下一步再怀疑接线和器件。
 ----------------------------------------------------------------
 【3.2 i2c_scan】
-桥拒绝了这条命令：-ERR TIMEOUT sda/scl stuck low (bus busy)
+桥拒绝了这条命令：-ERR TIMEOUT i2c busy (gpio sda=1 scl=0)
   ⓘ 总线超时。常见原因是 SDA 或 SCL 被某个器件**拉死在低电平**（总线卡死）—— 典型场景是主控在从设备发字节的中途复位。处置：断电重新上电，或在 SCL 上补 9 个时钟把从设备的状态机顶出来。
   （命令：I2C SCAN 0 8 119）
 ----------------------------------------------------------------
@@ -112,7 +142,74 @@ SPI 读（bus=0　桥：NUCLEO-H563ZI）
   （命令：RS485 SEND 0 2.0 48656c6c6f）
 
 ================================================================
-【4】跳过恢复（--no-restore）：桥固件留在板上
+【4】恢复原始固件（C:\Users\ljyit\AppData\Local\Temp\mcudbg_orig_sector0.bin）
+$ STM32_Programmer_CLI -c port=SWD mode=hotplug mode=normal -w C:\Users\ljyit\AppData\Local\Temp\mcudbg_orig_sector0.bin 0x08000000 -v -rst
+        -------------------------------------------------------------------
+                         STM32CubeProgrammer v2.21.0
+        -------------------------------------------------------------------
+  ST-LINK SN  : 0046001C3234511737333934
+  ST-LINK FW  : V3J10M3
+  Board       : NUCLEO-H563ZI
+  Voltage     : 3.27V
+  SWD freq    : 8000 KHz
+  Connect mode: Normal
+  Reset mode  : Software reset
+  Device ID   : 0x484
+  Revision ID : Rev X
+  Device name : STM32H56x/573
+  Flash size  : 2 MBytes
+  Device type : MCU
+  Device CPU  : Cortex-M33
+  BL Version  : 0xE4
+  SFSP Version: v2.5.0
+  Debug in Low Power mode enabled
+  Opening and parsing file: mcudbg_orig_sector0.bin
+  Memory Programming ...
+    File          : mcudbg_orig_sector0.bin
+    Size          : 8.00 KB
+    Address       : 0x08000000
+  Erasing memory corresponding to segment 0:
+  Erasing internal memory sector 0
+  Download in Progress:
+  File download complete
+  Time elapsed during download operation: 00:00:00.076
+  Verifying...
+  Read progress:
+  Time elapsed during verifying operation: 00:00:00.027
+  Download verified successfully
+  MCU Reset
+  Software reset is performed
+  (rc=0)
+$ STM32_Programmer_CLI -c port=SWD mode=normal -u 0x08000000 8192 D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\restore_readback.bin
+        -------------------------------------------------------------------
+                         STM32CubeProgrammer v2.21.0
+        -------------------------------------------------------------------
+  ST-LINK SN  : 0046001C3234511737333934
+  ST-LINK FW  : V3J10M3
+  Board       : NUCLEO-H563ZI
+  Voltage     : 3.28V
+  SWD freq    : 8000 KHz
+  Connect mode: Normal
+  Reset mode  : Software reset
+  Device ID   : 0x484
+  Revision ID : Rev X
+  Device name : STM32H56x/573
+  Flash size  : 2 MBytes
+  Device type : MCU
+  Device CPU  : Cortex-M33
+  BL Version  : 0xE4
+  SFSP Version: v2.5.0
+  Debug in Low Power mode enabled
+  UPLOADING ...
+    File          : D:\work\.dev\ls\mcu-debug-mcp\src\mcu_debug_mcp\tools\bridge_fw\restore_readback.bin
+    Size          : 8192 Bytes
+    Address:      : 0x8000000
+  Read progress:
+  Data read successfully
+  Warning: The file restore_readback.bin already exists, it will be overwritten
+  Time elapsed during read operation is: 00:00:00.028
+  (rc=0)
+恢复回读 md5 b3125ddb6fb0933067fd811e69b4e8a3（期望 b3125ddb6fb0933067fd811e69b4e8a3）→ 一致 ✓
 
 ================================================================
 验证汇总：
