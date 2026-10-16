@@ -1,5 +1,7 @@
 # mcu-debug-mcp · 嵌入式调试 MCP（领域级）
 
+<!-- MCP Registry ownership: mcp-name: io.github.liujycode/mcu-debug-mcp -->
+
 让 AI"看到并看懂"你手上的板子：串口读写 + 故障模式库（45 条规则）+ 烧录失败模式直译 + Modbus 帧解析 + 编译报错解析 + 引脚冲突检测（三引擎）+ 板级知识库 + 波特率自动探测 + AT 序列回归 + 双口对录 + 会话持久化 + RTT 通道 + 烧录桥接 + 寄存器位域解码 + 调试器探测 + 预验证驱动模板库（9 款）+ **器件选型库（按接口/地址/时序要求）** + **外设 API 用法层（初始化顺序硬要求）** + **错误码统一查询（6 张表·带出处）** + **报文解析（自定义二进制帧 / NMEA-GPS）** + **工程结构与工具链探测** + **会话日志治理与交付报告**。共 59 个工具 + 16 个 MCP resources + 6 个 prompts（8 静态 resources + 8 模板 resources）。
 
 **和"直接问 AI"的本质区别**：AI 不再听你转述"传感器好像不太对"，而是亲自读到串口里的真实字节——AT 指令返回了什么、数据是全 0 还是乱码、程序是不是在反复重启、**Keil 为什么烧不进去**——然后按**出厂预置的故障模式库**给出诊断和排查步骤。引脚分配前用数据手册级映射表核对（能抓 AI 幻觉接线）。驱动代码来自验证过的模板库（纯函数 PC 可测 + Python 交叉验证），不是 AI 现编的。
@@ -183,6 +185,31 @@ mcu-debug-mcp
 
 ## 客户端配置
 
+### 一键安装（Claude Code / Claude Desktop / Cursor）
+
+```bash
+# Claude Code
+pip install "mcu-debug-mcp[all]"
+claude mcp add mcu-debug-mcp -- python -m mcu_debug_mcp.server
+```
+
+**Claude Desktop**（`claude_desktop_config.json`）/ **Cursor**（`mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "mcu-debug-mcp": {
+      "command": "python",
+      "args": ["-m", "mcu_debug_mcp.server"],
+      "env": { "MCU_DEBUG_MCP_MODE": "readonly" }
+    }
+  }
+}
+```
+
+> 默认 `readonly` 档：读/枚举可用，写串口、烧录等硬件操作被拒并说明如何放开。
+> 调试需要真机写入时再加 `"MCU_DEBUG_MCP_MODE": "write"` + `MCU_DEBUG_MCP_PORT_DENY` 锁住在用的口（见上文安全表）。
+
 ### WorkBuddy（三步上手）
 
 **第 1 步：装包**（本机需有 Python 3.10+；没有就让 WorkBuddy 代装，见下方提示词）
@@ -218,7 +245,10 @@ pip install "mcu-debug-mcp[all]"
 "args": ["-m", "mcu_debug_mcp.server"]}}} 写入 MCP 配置并告诉我如何 Trust 启用。
 ```
 
-**Claude Desktop**（claude_desktop_config.json）与 **Cursor**（mcp.json）同格式（`python -m mcu_debug_mcp.server`）。
+### 其他客户端
+
+Claude Desktop / Cursor / Windsurf 同格式（`python -m mcu_debug_mcp.server`）。
+Cline 安装参考本 README（llms-install 兼容）。
 
 ## 验证状态（2026-10-13 复验，v4.5.5）
 

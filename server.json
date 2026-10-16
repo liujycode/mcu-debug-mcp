@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.liujycode/mcu-debug-mcp",
+  "title": "mcu-debug-mcp",
+  "description": "Embedded debug MCP: serial, flash verify, fault decode, 45-pattern log analyzer, driver library",
+  "version": "4.6.0",
+  "websiteUrl": "https://github.com/liujycode/mcu-debug-mcp",
+  "repository": {
+    "url": "https://github.com/liujycode/mcu-debug-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "mcu-debug-mcp",
+      "version": "4.6.0",
+      "environmentVariables": [
+        {
+          "name": "MCU_DEBUG_MCP_MODE",
+          "description": "Isolation mode: readonly (default) or write. Controls whether serial write/flash operations are allowed",
+          "isRequired": false
+        },
+        {
+          "name": "MCU_DEBUG_MCP_PORT_DENY",
+          "description": "Comma-separated port denylist (e.g. COM6,COM28); supports * wildcard; DENY overrides ALLOW",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
