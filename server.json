@@ -3,7 +3,7 @@
   "name": "io.github.liujycode/mcu-debug-mcp",
   "title": "mcu-debug-mcp",
   "description": "Embedded debug MCP: serial, flash verify, fault decode, 45-pattern log analyzer, driver library",
-  "version": "4.6.0",
+  "version": "0.1.0",
   "websiteUrl": "https://github.com/liujycode/mcu-debug-mcp",
   "repository": {
     "url": "https://github.com/liujycode/mcu-debug-mcp",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "mcu-debug-mcp",
-      "version": "4.6.0",
+      "version": "0.1.0",
       "environmentVariables": [
         {
           "name": "MCU_DEBUG_MCP_MODE",
