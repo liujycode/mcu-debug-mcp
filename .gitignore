@@ -35,3 +35,6 @@ mcu_debug_mcp-*/
 # PyPI 发布（token 永不进 git）
 .pypirc
 .publish_venv/
+
+# MCP Registry 发布工具目录（本地工具，不入库）
+.registry_tool/
