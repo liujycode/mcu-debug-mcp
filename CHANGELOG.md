@@ -17,6 +17,14 @@
 
 ---
 
+## [0.1.1] - 2026-10-23
+
+### 修正
+- **Registry 所有权标记迁移**：README 的 `mcp-name` 更新为 `io.github.stillsurge/mcu-debug-mcp`——项目仓库已转移至 GitHub org `stillsurge`（原 `liujycode` 个人空间），`server.json` 命名空间与 repository URL 同步
+- 代码零改动，仅元数据迁移；安装、配置、工具清单（59/8/8/6）与 0.1.0 完全一致
+
+---
+
 ## [0.1.0] - 2026-10-16
 
 **首次公开发布**（PyPI + 官方 MCP Registry）。

@@ -3,7 +3,7 @@
   "name": "io.github.stillsurge/mcu-debug-mcp",
   "title": "mcu-debug-mcp",
   "description": "Embedded debug MCP: serial, flash verify, fault decode, 45-pattern log analyzer, driver library",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://github.com/stillsurge/mcu-debug-mcp",
   "repository": {
     "url": "https://github.com/stillsurge/mcu-debug-mcp",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "mcu-debug-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       },
