@@ -623,13 +623,17 @@ class StreamCaptureTest(unittest.TestCase):
 
         实测踩到过：一次性回灌的日志会让「数据率」算出 6e9 行/秒这种垃圾数。
         正确行为是**明说窗口不够、这些指标一律不给**。
+
+        直接构造 [+0.0000] 同刻度日志（确定性输入）——不再经由 stream_capture
+        现场采集：一次到达 5 行的时间戳取决于逐行取钟是否跨过 0.1ms 刻度
+        边界，在高速机上会 flaky（与 4e89d01 修的 NTFS mtime 亚毫秒竞态同族）。
+        被测行为（timing_analysis 对同刻度输入的拒绝路径）不变。
         """
         d = tempfile.mkdtemp(prefix="mcp-cap-")
         out_path = os.path.join(d, "burst.log")
-        with relaxed_env(mode="write"):
-            with mock.patch.object(core, "_open_serial",
-                                   lambda **k: _FakePort([b"A\nB\nC\nD\nE\n"])):
-                core.stream_capture("COM_TEST", seconds=0.3, out_path=out_path)
+        with open(out_path, "w", encoding="utf-8") as fh:
+            for ch in "ABCDE":
+                fh.write("[+0.0000] %s\n" % ch)
         ana = core.timing_analysis(path=out_path)
         self.assertIn("同一个刻度内", ana)
         self.assertIn("一律不给", ana)
