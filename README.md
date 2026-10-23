@@ -1,6 +1,6 @@
 # mcu-debug-mcp · 嵌入式调试 MCP（领域级）
 
-<!-- MCP Registry ownership: mcp-name: io.github.liujycode/mcu-debug-mcp -->
+<!-- MCP Registry ownership: mcp-name: io.github.stillsurge/mcu-debug-mcp -->
 
 让 AI"看到并看懂"你手上的板子：串口读写 + 故障模式库（45 条规则）+ 烧录失败模式直译 + Modbus 帧解析 + 编译报错解析 + 引脚冲突检测（三引擎）+ 板级知识库 + 波特率自动探测 + AT 序列回归 + 双口对录 + 会话持久化 + RTT 通道 + 烧录桥接 + 寄存器位域解码 + 调试器探测 + 预验证驱动模板库（9 款）+ **器件选型库（按接口/地址/时序要求）** + **外设 API 用法层（初始化顺序硬要求）** + **错误码统一查询（6 张表·带出处）** + **报文解析（自定义二进制帧 / NMEA-GPS）** + **工程结构与工具链探测** + **会话日志治理与交付报告**。共 59 个工具 + 16 个 MCP resources + 6 个 prompts（8 静态 resources + 8 模板 resources）。
 
